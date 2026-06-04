@@ -64,7 +64,7 @@ function ai {
                 return
             }
 
-            Copy-TerminalAiCommand $result.command
+            Invoke-TerminalAiEditableCommand $result.command
             return
         }
         'copy' {
@@ -262,6 +262,210 @@ function Copy-TerminalAiCommand {
     }
 
     Write-Host $Command
+}
+
+function Invoke-TerminalAiEditableCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Command
+    )
+
+    if ([Console]::IsInputRedirected -or [Console]::IsOutputRedirected) {
+        Copy-TerminalAiCommand $Command
+        return
+    }
+
+    $editedCommand = Read-TerminalAiEditableLine -InitialText $Command
+    if ([string]::IsNullOrWhiteSpace($editedCommand)) {
+        return
+    }
+
+    Invoke-TerminalAiCommand $editedCommand
+}
+
+function Read-TerminalAiEditableLine {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $InitialText
+    )
+
+    Write-Host '> ' -ForegroundColor DarkGray -NoNewline
+
+    $buffer = $InitialText
+    $cursor = $buffer.Length
+    $startLeft = [Console]::CursorLeft
+    $startTop = [Console]::CursorTop
+    $lastLength = 0
+
+    Render-TerminalAiEditableLine `
+        -Buffer $buffer `
+        -Cursor $cursor `
+        -StartLeft $startLeft `
+        -StartTop $startTop `
+        -PreviousLength ([ref] $lastLength)
+
+    while ($true) {
+        $key = [Console]::ReadKey($true)
+
+        if (($key.Modifiers -band [ConsoleModifiers]::Control) -and $key.Key -eq [ConsoleKey]::C) {
+            Write-Host ''
+            return $null
+        }
+
+        switch ($key.Key) {
+            ([ConsoleKey]::Enter) {
+                Write-Host ''
+                return $buffer
+            }
+            ([ConsoleKey]::Escape) {
+                Write-Host ''
+                return $null
+            }
+            ([ConsoleKey]::Backspace) {
+                if ($cursor -gt 0) {
+                    $buffer = Remove-TerminalAiCharAt -Value $buffer -Index ($cursor - 1)
+                    $cursor--
+                }
+            }
+            ([ConsoleKey]::Delete) {
+                if ($cursor -lt $buffer.Length) {
+                    $buffer = Remove-TerminalAiCharAt -Value $buffer -Index $cursor
+                }
+            }
+            ([ConsoleKey]::LeftArrow) {
+                if ($cursor -gt 0) {
+                    $cursor--
+                }
+            }
+            ([ConsoleKey]::RightArrow) {
+                if ($cursor -lt $buffer.Length) {
+                    $cursor++
+                }
+            }
+            ([ConsoleKey]::Home) {
+                $cursor = 0
+            }
+            ([ConsoleKey]::End) {
+                $cursor = $buffer.Length
+            }
+            default {
+                if (-not [char]::IsControl($key.KeyChar)) {
+                    $buffer = Insert-TerminalAiCharAt -Value $buffer -Index $cursor -Char $key.KeyChar
+                    $cursor++
+                }
+            }
+        }
+
+        Render-TerminalAiEditableLine `
+            -Buffer $buffer `
+            -Cursor $cursor `
+            -StartLeft $startLeft `
+            -StartTop $startTop `
+            -PreviousLength ([ref] $lastLength)
+    }
+}
+
+function Render-TerminalAiEditableLine {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string] $Buffer,
+
+        [Parameter(Mandatory = $true)]
+        [int] $Cursor,
+
+        [Parameter(Mandatory = $true)]
+        [int] $StartLeft,
+
+        [Parameter(Mandatory = $true)]
+        [int] $StartTop,
+
+        [Parameter(Mandatory = $true)]
+        [ref] $PreviousLength
+    )
+
+    $clearLength = [Math]::Max([int] $PreviousLength.Value, $Buffer.Length)
+    [Console]::SetCursorPosition($StartLeft, $StartTop)
+    [Console]::Write($Buffer)
+    if ($clearLength -gt $Buffer.Length) {
+        [Console]::Write((' ' * ($clearLength - $Buffer.Length)))
+    }
+
+    $PreviousLength.Value = $Buffer.Length
+    Set-TerminalAiCursorForOffset -StartLeft $StartLeft -StartTop $StartTop -Offset $Cursor
+}
+
+function Set-TerminalAiCursorForOffset {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int] $StartLeft,
+
+        [Parameter(Mandatory = $true)]
+        [int] $StartTop,
+
+        [Parameter(Mandatory = $true)]
+        [int] $Offset
+    )
+
+    $width = [Console]::BufferWidth
+    if ($width -le 0) {
+        $width = 120
+    }
+
+    $absolute = $StartLeft + $Offset
+    $left = $absolute % $width
+    $top = $StartTop + [Math]::Floor($absolute / $width)
+
+    [Console]::SetCursorPosition($left, $top)
+}
+
+function Insert-TerminalAiCharAt {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string] $Value,
+
+        [Parameter(Mandatory = $true)]
+        [int] $Index,
+
+        [Parameter(Mandatory = $true)]
+        [char] $Char
+    )
+
+    if ($Index -le 0) {
+        return "$Char$Value"
+    }
+
+    if ($Index -ge $Value.Length) {
+        return "$Value$Char"
+    }
+
+    return $Value.Substring(0, $Index) + $Char + $Value.Substring($Index)
+}
+
+function Remove-TerminalAiCharAt {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [string] $Value,
+
+        [Parameter(Mandatory = $true)]
+        [int] $Index
+    )
+
+    if ($Value.Length -eq 0 -or $Index -lt 0 -or $Index -ge $Value.Length) {
+        return $Value
+    }
+
+    if ($Index -eq 0) {
+        return $Value.Substring(1)
+    }
+
+    if ($Index -eq ($Value.Length - 1)) {
+        return $Value.Substring(0, $Index)
+    }
+
+    return $Value.Substring(0, $Index) + $Value.Substring($Index + 1)
 }
 
 function Invoke-TerminalAiCommand {

@@ -54,9 +54,9 @@ ai summarize these files --files README.md docs\TODO.md
 ```
 
 `Enter` in the picker runs the selected command in the current PowerShell
-session. `e` copies the selected command to your clipboard so you can paste,
-edit, and run it manually. `c` copies, `r` regenerates options, and `q`/`Esc`
-cancel.
+session. `e` opens the selected command on a fresh editable line; press `Enter`
+there to run the edited command, or `Esc`/`Ctrl+C` to cancel. `c` copies, `r`
+regenerates options, and `q`/`Esc` cancel.
 
 By default, `ai-core` sends lightweight local context to the LLM: current
 directory, shell/OS metadata, git branch/repo status, recent commit hashes,

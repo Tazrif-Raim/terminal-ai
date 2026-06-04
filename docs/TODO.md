@@ -217,7 +217,7 @@ Select command
   Kill process using port 3000
   Stop-Process -Id <PID> -Force
 
-↑/↓ or w/s = select | Enter = run | e = copy/edit | q = cancel
+↑/↓ or w/s = select | Enter = run | e = edit | c = copy | q = cancel
 ```
 
 - [x] Use `crossterm` raw mode.
@@ -308,7 +308,7 @@ function ai {
 
 - [x] Add wrapper to `shell/powershell.ps1`.
 - [x] Document how to add it to PowerShell profile.
-- [ ] Verify `e` inserts into the next prompt.
+- [x] Verify `e` opens a fresh editable command line.
 - [x] Verify `Enter` runs in the current PowerShell context.
 - [x] Verify commands like `cd` affect the current session.
 - [x] Verify environment changes persist where PowerShell allows it.
@@ -444,16 +444,22 @@ thinking...
 
 ---
 
-## Phase 10 — Improved PowerShell UX
+## Phase 10 — Fix PowerShell edit UX
 
 Goal: fix edit mode and other UX improvements.
 
 PowerShell:
 
-- [ ] Revisit command-mode edit UX:
-  - [ ] Desired behavior: `ai <prompt>` -> pick option -> `e` places selected command into a fresh editable terminal line without running it.
-  - [ ] Current command-mode fallback: `e` copies the selected command to clipboard for manual paste/edit.
-  - [ ] Investigate whether this is possible outside a PSReadLine key handler without terminal repaint glitches.
+- [x] Revisit command-mode edit UX:
+  - [x] Desired behavior: `ai <prompt>` -> pick option -> `e` places selected command into a fresh editable terminal line without running it.
+  - [x] Replace previous fallback where `e` copied the selected command to clipboard for manual paste/edit.
+  - [x] Investigate whether this is possible outside a PSReadLine key handler without terminal repaint glitches.
+  - [x] Implement command-mode edit as a small inline PowerShell editor:
+    - [x] Shows selected command immediately on a fresh editable line.
+    - [x] Supports typing, Backspace, Delete, Left/Right, Home/End.
+    - [x] `Enter` runs the edited command in the current PowerShell session.
+    - [x] `Esc` or `Ctrl+C` cancels without running.
+    - [x] Falls back to clipboard copy when console input/output is redirected.
 
 ---
 
@@ -657,7 +663,7 @@ ai what is running on port 3000
 - [ ] Rust binary calls LLM and returns 1-3 command options.
 - [ ] User can select with arrow keys or `a`/`s`.
 - [ ] `Enter` runs selected command natively in PowerShell.
-- [ ] `e` inserts selected command into the prompt for editing.
+- [ ] `e` opens selected command for editing.
 - [ ] `q` or `Esc` cancels.
 - [ ] Dangerous commands require second confirmation.
 - [ ] Terminal state is restored after every exit path.
