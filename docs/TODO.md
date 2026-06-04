@@ -90,26 +90,26 @@ cargo new ai-core
 
 ## Phase 2 — Basic CLI Input
 
-Goal: allow this command:
+Goal: allow this type of command:
 
 ```powershell
 ai what is running on port 3000
 ```
 
-- [ ] Implement argument parsing in Rust.
-- [ ] Accept unquoted prompt text.
-- [ ] Join all args after command into one prompt string.
-- [ ] Add `--shell-mode` flag.
-- [ ] Add `--debug` flag.
-- [ ] Add `--version` flag.
-- [ ] Handle empty prompt:
+- [x] Implement argument parsing in Rust.
+- [x] Accept unquoted prompt text.
+- [x] Join all args after command into one prompt string.
+- [x] Add `--shell-mode` flag.
+- [x] Add `--debug` flag.
+- [x] Add `--version` flag.
+- [x] Handle empty prompt:
 
 ```txt
 Usage: ai <what do you want to do?>
 ```
 
-- [ ] Keep stdout reserved for final machine-readable JSON in `--shell-mode`.
-- [ ] Send UI, errors, loading text, and debug logs to stderr.
+- [x] Keep stdout reserved for final machine-readable JSON in `--shell-mode`.
+- [x] Send UI, errors, loading text, and debug logs to stderr.
 
 ---
 
