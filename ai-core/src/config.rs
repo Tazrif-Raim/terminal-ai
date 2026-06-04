@@ -13,6 +13,9 @@ const ENV_MODEL: &str = "LLM_MODEL";
 const ENV_DOTENV_PATH: &str = "TERMINAL_AI_DOTENV_PATH";
 const DEFAULT_MAX_OPTIONS: usize = 3;
 const DEFAULT_DANGEROUS_REQUIRES_CONFIRM: bool = true;
+const DEFAULT_SEND_CONTEXT: bool = true;
+const DEFAULT_SEND_RECENT_COMMANDS: bool = true;
+const DEFAULT_MAX_RECENT_COMMANDS: usize = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedConfig {
@@ -22,6 +25,9 @@ pub(crate) struct ResolvedConfig {
     pub(crate) default_shell: String,
     pub(crate) max_options: usize,
     pub(crate) dangerous_requires_confirm: bool,
+    pub(crate) send_context: bool,
+    pub(crate) send_recent_commands: bool,
+    pub(crate) max_recent_commands: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,6 +38,9 @@ pub(crate) struct PartialConfig {
     default_shell: String,
     max_options: usize,
     dangerous_requires_confirm: bool,
+    send_context: bool,
+    send_recent_commands: bool,
+    max_recent_commands: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -42,6 +51,9 @@ pub(crate) struct RedactedConfig {
     default_shell: String,
     max_options: usize,
     dangerous_requires_confirm: bool,
+    send_context: bool,
+    send_recent_commands: bool,
+    max_recent_commands: usize,
 }
 
 #[derive(Debug)]
@@ -81,6 +93,9 @@ struct FileConfig {
     default_shell: Option<String>,
     max_options: Option<usize>,
     dangerous_requires_confirm: Option<bool>,
+    send_context: Option<bool>,
+    send_recent_commands: Option<bool>,
+    max_recent_commands: Option<usize>,
 }
 
 impl ResolvedConfig {
@@ -92,6 +107,9 @@ impl ResolvedConfig {
             default_shell: self.default_shell.clone(),
             max_options: self.max_options,
             dangerous_requires_confirm: self.dangerous_requires_confirm,
+            send_context: self.send_context,
+            send_recent_commands: self.send_recent_commands,
+            max_recent_commands: self.max_recent_commands,
         }
     }
 }
@@ -105,6 +123,9 @@ impl PartialConfig {
             default_shell: self.default_shell.clone(),
             max_options: self.max_options,
             dangerous_requires_confirm: self.dangerous_requires_confirm,
+            send_context: self.send_context,
+            send_recent_commands: self.send_recent_commands,
+            max_recent_commands: self.max_recent_commands,
         }
     }
 
@@ -130,6 +151,9 @@ impl PartialConfig {
             default_shell: self.default_shell,
             max_options: self.max_options,
             dangerous_requires_confirm: self.dangerous_requires_confirm,
+            send_context: self.send_context,
+            send_recent_commands: self.send_recent_commands,
+            max_recent_commands: self.max_recent_commands,
         })
     }
 
@@ -269,6 +293,14 @@ fn load_partial_from_path(
         dangerous_requires_confirm: file_config
             .dangerous_requires_confirm
             .unwrap_or(DEFAULT_DANGEROUS_REQUIRES_CONFIRM),
+        send_context: file_config.send_context.unwrap_or(DEFAULT_SEND_CONTEXT),
+        send_recent_commands: file_config
+            .send_recent_commands
+            .unwrap_or(DEFAULT_SEND_RECENT_COMMANDS),
+        max_recent_commands: file_config
+            .max_recent_commands
+            .unwrap_or(DEFAULT_MAX_RECENT_COMMANDS)
+            .min(20),
     })
 }
 
@@ -440,7 +472,10 @@ mod tests {
                 "model": "file-model",
                 "default_shell": "powershell",
                 "max_options": 2,
-                "dangerous_requires_confirm": false
+                "dangerous_requires_confirm": false,
+                "send_context": false,
+                "send_recent_commands": false,
+                "max_recent_commands": 3
             }"#,
         );
 
@@ -452,6 +487,9 @@ mod tests {
         assert_eq!(config.default_shell, "powershell");
         assert_eq!(config.max_options, 2);
         assert!(!config.dangerous_requires_confirm);
+        assert!(!config.send_context);
+        assert!(!config.send_recent_commands);
+        assert_eq!(config.max_recent_commands, 3);
     }
 
     #[test]
@@ -558,6 +596,27 @@ mod tests {
         let config = load_from_path(&path, |_| None).expect("load config");
 
         assert!(config.dangerous_requires_confirm);
+        assert!(config.send_context);
+        assert!(config.send_recent_commands);
+        assert_eq!(config.max_recent_commands, 10);
+    }
+
+    #[test]
+    fn clamps_max_recent_commands_to_reasonable_limit() {
+        let path = test_config_path("clamps_max_recent_commands_to_reasonable_limit");
+        write_config(
+            &path,
+            r#"{
+                "api_url": "https://example.test",
+                "api_key": "secret-test-key",
+                "model": "model",
+                "max_recent_commands": 100
+            }"#,
+        );
+
+        let config = load_from_path(&path, |_| None).expect("load config");
+
+        assert_eq!(config.max_recent_commands, 20);
     }
 
     #[test]

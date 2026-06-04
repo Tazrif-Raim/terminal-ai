@@ -1,10 +1,11 @@
-use std::{fmt, time::Duration};
+use std::{fmt, path::PathBuf, time::Duration};
 
 use reqwest::{StatusCode, blocking::Client};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     config::ResolvedConfig,
+    context,
     prompt::{self, PromptContext},
     types::{CommandOptions, OptionsValidationError},
 };
@@ -90,13 +91,14 @@ impl std::error::Error for LlmError {}
 pub(crate) fn generate_options(
     config: &ResolvedConfig,
     request: &str,
+    files: &[PathBuf],
 ) -> Result<CommandOptions, LlmError> {
     let client = Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .build()
         .map_err(LlmError::ClientBuild)?;
 
-    generate_options_with_sender(config, request, |chat_request| {
+    generate_options_with_sender(config, request, files, |chat_request| {
         send_chat_request(&client, config, chat_request)
     })
 }
@@ -104,9 +106,10 @@ pub(crate) fn generate_options(
 fn generate_options_with_sender(
     config: &ResolvedConfig,
     request: &str,
+    files: &[PathBuf],
     mut send: impl FnMut(&ChatRequest) -> Result<String, LlmError>,
 ) -> Result<CommandOptions, LlmError> {
-    let chat_request = build_chat_request(config, request);
+    let chat_request = build_chat_request(config, request, files);
     let first_content = send(&chat_request)?;
 
     match parse_command_options(&first_content, config.max_options) {
@@ -119,11 +122,14 @@ fn generate_options_with_sender(
     }
 }
 
-fn build_chat_request(config: &ResolvedConfig, request: &str) -> ChatRequest {
+fn build_chat_request(config: &ResolvedConfig, request: &str, files: &[PathBuf]) -> ChatRequest {
+    let shell_context = context::collect(config, files);
+    let shell = shell_context.shell_label();
     let context = PromptContext {
-        os: prompt::current_os(),
-        shell: &config.default_shell,
+        os: &shell_context.os,
+        shell: &shell,
         max_options: config.max_options,
+        shell_context: config.send_context.then_some(&shell_context),
     };
 
     ChatRequest {
@@ -233,7 +239,7 @@ mod tests {
     #[test]
     fn builds_openai_compatible_chat_request() {
         let config = config();
-        let request = build_chat_request(&config, "what is running on port 3000");
+        let request = build_chat_request(&config, "what is running on port 3000", &[]);
 
         assert_eq!(request.model, "test-model");
         assert_eq!(request.temperature, 0.1);
@@ -285,7 +291,7 @@ mod tests {
     fn retries_once_when_assistant_content_is_malformed_json() {
         let config = config();
         let mut calls = 0;
-        let options = generate_options_with_sender(&config, "show processes", |_| {
+        let options = generate_options_with_sender(&config, "show processes", &[], |_| {
             calls += 1;
             if calls == 1 {
                 Ok("not json".to_owned())
@@ -303,7 +309,7 @@ mod tests {
     fn does_not_retry_invalid_options() {
         let config = config();
         let mut calls = 0;
-        let error = generate_options_with_sender(&config, "show processes", |_| {
+        let error = generate_options_with_sender(&config, "show processes", &[], |_| {
             calls += 1;
             Ok(r#"{"options":[]}"#.to_owned())
         })
@@ -321,6 +327,9 @@ mod tests {
             default_shell: "powershell".to_owned(),
             max_options: 3,
             dangerous_requires_confirm: true,
+            send_context: true,
+            send_recent_commands: true,
+            max_recent_commands: 5,
         }
     }
 }

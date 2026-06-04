@@ -161,6 +161,9 @@ fn print_config_writes_redacted_json_to_stdout() {
     assert!(stdout.contains("\"api_key\": \"test...-key\""));
     assert!(stdout.contains("\"model\": \"test-model\""));
     assert!(stdout.contains("\"dangerous_requires_confirm\": true"));
+    assert!(stdout.contains("\"send_context\": true"));
+    assert!(stdout.contains("\"send_recent_commands\": true"));
+    assert!(stdout.contains("\"max_recent_commands\": 10"));
     assert!(!stdout.contains("test-secret-key"));
 }
 

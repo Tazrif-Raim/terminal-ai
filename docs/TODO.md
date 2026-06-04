@@ -364,24 +364,27 @@ Goal: improve LLM output using local context.
 
 PowerShell context:
 
-- [ ] Current directory.
-- [ ] Current git branch.
-- [ ] Recent commands.
-- [ ] OS version.
-- [ ] Shell name/version.
-- [ ] Whether current directory is a git repo.
-- [ ] Visible package manager hints:
-  - [ ] `package.json`
-  - [ ] `pnpm-lock.yaml`
-  - [ ] `package-lock.json`
-  - [ ] `yarn.lock`
-  - [ ] `Cargo.toml`
-  - [ ] `go.mod`
-  - [ ] `Dockerfile`
-  - [ ] `docker-compose.yml`
-  - [ ] `.env.example`
+- [x] Current directory.
+- [x] Current git branch.
+- [x] Recent commands.
+- [x] OS version.
+- [x] Shell name/version.
+- [x] Whether current directory is a git repo.
+- [x] Git commit hashes for recent commits.
+- [x] Detected files in current directory.
+- [x] add files with --files <file_1> <file_2> ... flag.
+- [x] Visible package manager hints:
+  - [x] `package.json`
+  - [x] `pnpm-lock.yaml`
+  - [x] `package-lock.json`
+  - [x] `yarn.lock`
+  - [x] `Cargo.toml`
+  - [x] `go.mod`
+  - [x] `Dockerfile`
+  - [x] `docker-compose.yml`
+  - [x] `.env.example`
 
-Example context:
+Example context (Make the context properly spaced with delimiters and newlines for better LLM parsing):
 
 ```txt
 OS: Windows
@@ -394,17 +397,17 @@ npm run dev
 docker compose ps
 ```
 
-- [ ] Add context into LLM prompt.
-- [ ] Avoid sending secrets.
-- [ ] Do not send full `.env` contents.
-- [ ] Do not send full file contents by default.
-- [ ] Add config:
+- [x] Add context into LLM prompt.
+- [x] Avoid sending secrets.
+- [x] Do not send full `.env` contents.
+- [x] Do not send full file contents by default (only send of ones that are flagged with --files).
+- [x] Add config:
 
 ```json
 {
   "send_context": true,
   "send_recent_commands": true,
-  "max_recent_commands": 5
+  "max_recent_commands": 10
 }
 ```
 

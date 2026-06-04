@@ -9,7 +9,12 @@ function ai {
         [string[]] $Prompt
     )
 
-    $promptText = ($Prompt -join ' ').Trim()
+    $parsedArgs = Split-TerminalAiPromptArgs $Prompt
+    if (-not $parsedArgs) {
+        return
+    }
+
+    $promptText = $parsedArgs.Prompt
     if (-not $promptText) {
         Write-Host 'Usage: ai <what do you want to do?>'
         return
@@ -21,22 +26,28 @@ function ai {
         return
     }
 
-    $restoreDotenvPath = $false
+    $terminalAiEnv = Get-TerminalAiContextEnv
     if (-not $env:TERMINAL_AI_DOTENV_PATH) {
-        $env:TERMINAL_AI_DOTENV_PATH = Join-Path $script:TerminalAiRoot '.env'
-        $restoreDotenvPath = $true
+        $terminalAiEnv['TERMINAL_AI_DOTENV_PATH'] = Join-Path $script:TerminalAiRoot '.env'
     }
+    $previousTerminalAiEnv = Set-TerminalAiProcessEnv $terminalAiEnv
 
     try {
-        $json = & $aiCore --shell-mode -- $promptText
+        $aiCoreArgs = @('--shell-mode')
+        if ($parsedArgs.Files.Count -gt 0) {
+            $aiCoreArgs += '--files'
+            $aiCoreArgs += $parsedArgs.Files
+        }
+        $aiCoreArgs += '--'
+        $aiCoreArgs += $promptText
+
+        $json = & $aiCore @aiCoreArgs
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) {
             return
         }
     }
     finally {
-        if ($restoreDotenvPath) {
-            Remove-Item Env:\TERMINAL_AI_DOTENV_PATH -ErrorAction SilentlyContinue
-        }
+        Restore-TerminalAiProcessEnv $previousTerminalAiEnv
     }
 
     $result = ConvertFrom-TerminalAiJson $json
@@ -83,6 +94,125 @@ function Get-TerminalAiCore {
     }
 
     return $null
+}
+
+function Split-TerminalAiPromptArgs {
+    param(
+        [string[]] $InputArgs
+    )
+
+    $usage = 'Usage: ai <what do you want to do?> --files <file_1> <file_2>'
+    $files = New-Object System.Collections.Generic.List[string]
+    $promptParts = New-Object System.Collections.Generic.List[string]
+
+    $filesFlagIndex = -1
+    for ($i = 0; $i -lt $InputArgs.Count; $i++) {
+        if ($InputArgs[$i] -eq '--files') {
+            $filesFlagIndex = $i
+            break
+        }
+    }
+
+    if ($filesFlagIndex -lt 0) {
+        foreach ($arg in $InputArgs) {
+            $promptParts.Add($arg)
+        }
+
+        return [pscustomobject] @{
+            Prompt = ($promptParts -join ' ').Trim()
+            Files = $files.ToArray()
+        }
+    }
+
+    for ($i = 0; $i -lt $filesFlagIndex; $i++) {
+        $promptParts.Add($InputArgs[$i])
+    }
+
+    $separatorIndex = -1
+    for ($i = $filesFlagIndex + 1; $i -lt $InputArgs.Count; $i++) {
+        if ($InputArgs[$i] -eq '--') {
+            $separatorIndex = $i
+            break
+        }
+    }
+
+    $fileEndIndex = $InputArgs.Count
+    if ($separatorIndex -ge 0) {
+        $fileEndIndex = $separatorIndex
+    }
+
+    for ($i = $filesFlagIndex + 1; $i -lt $fileEndIndex; $i++) {
+        $files.Add($InputArgs[$i])
+    }
+
+    if ($files.Count -eq 0) {
+        if ($separatorIndex -ge 0) {
+            Write-Host $usage
+            return $null
+        }
+
+        foreach ($arg in $InputArgs[($filesFlagIndex)..($InputArgs.Count - 1)]) {
+            $promptParts.Add($arg)
+        }
+
+        return [pscustomobject] @{
+            Prompt = ($promptParts -join ' ').Trim()
+            Files = @()
+        }
+    }
+
+    if ($separatorIndex -ge 0) {
+        for ($i = $separatorIndex + 1; $i -lt $InputArgs.Count; $i++) {
+            $promptParts.Add($InputArgs[$i])
+        }
+    }
+    elseif ($filesFlagIndex -eq 0) {
+        Write-Host $usage
+        return $null
+    }
+    elseif (-not (Test-TerminalAiFileArgs $files)) {
+        foreach ($arg in $InputArgs[($filesFlagIndex)..($InputArgs.Count - 1)]) {
+            $promptParts.Add($arg)
+        }
+        $files.Clear()
+    }
+
+    return [pscustomobject] @{
+        Prompt = ($promptParts -join ' ').Trim()
+        Files = $files.ToArray()
+    }
+}
+
+function Test-TerminalAiFileArgs {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Generic.List[string]] $Values
+    )
+
+    foreach ($value in $Values) {
+        if (Test-TerminalAiFileArg $value) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Test-TerminalAiFileArg {
+    param(
+        [AllowEmptyString()]
+        [string] $Value
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+
+    if (Test-Path -LiteralPath $Value) {
+        return $true
+    }
+
+    return $Value.Contains('\') -or $Value.Contains('/') -or [System.IO.Path]::HasExtension($Value)
 }
 
 function ConvertFrom-TerminalAiJson {
@@ -146,4 +276,71 @@ function Invoke-TerminalAiCommand {
     }
 
     Invoke-Expression $Command
+}
+
+function Get-TerminalAiContextEnv {
+    $values = @{
+        TERMINAL_AI_SHELL_NAME = 'PowerShell'
+        TERMINAL_AI_SHELL_VERSION = $PSVersionTable.PSVersion.ToString()
+        TERMINAL_AI_OS_VERSION = Get-TerminalAiOsVersion
+    }
+
+    $recentCommands = Get-TerminalAiRecentCommands -MaxCount 20
+    if ($recentCommands.Count -gt 0) {
+        $values['TERMINAL_AI_RECENT_COMMANDS'] = $recentCommands -join "`n"
+    }
+
+    return $values
+}
+
+function Get-TerminalAiOsVersion {
+    if ($PSVersionTable.OS) {
+        return $PSVersionTable.OS
+    }
+
+    return [System.Environment]::OSVersion.VersionString
+}
+
+function Get-TerminalAiRecentCommands {
+    param(
+        [int] $MaxCount = 20
+    )
+
+    $history = Get-History -Count ($MaxCount + 5) -ErrorAction SilentlyContinue
+    if (-not $history) {
+        return @()
+    }
+
+    return @(
+        $history |
+            Select-Object -ExpandProperty CommandLine |
+            Where-Object { $_ -and $_.Trim() -and ($_ -notmatch '^\s*ai(\s|$)') } |
+            Select-Object -Last $MaxCount
+    )
+}
+
+function Set-TerminalAiProcessEnv {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable] $Values
+    )
+
+    $previous = @{}
+    foreach ($key in $Values.Keys) {
+        $previous[$key] = [System.Environment]::GetEnvironmentVariable($key, 'Process')
+        [System.Environment]::SetEnvironmentVariable($key, [string] $Values[$key], 'Process')
+    }
+
+    return $previous
+}
+
+function Restore-TerminalAiProcessEnv {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable] $Previous
+    )
+
+    foreach ($key in $Previous.Keys) {
+        [System.Environment]::SetEnvironmentVariable($key, $Previous[$key], 'Process')
+    }
 }

@@ -50,11 +50,18 @@ Usage:
 
 ```powershell
 ai what is running on port 3000
+ai summarize these files --files README.md docs\TODO.md
 ```
 
 `Enter` in the picker runs the selected command in the current PowerShell
 session. `e` copies the selected command to your clipboard so you can paste,
 edit, and run it manually. `q` and `Esc` cancel.
+
+By default, `ai-core` sends lightweight local context to the LLM: current
+directory, shell/OS metadata, git branch/repo status, recent commit hashes,
+detected project files, and recent commands with likely secrets filtered out.
+File contents are not sent unless explicitly passed with `--files`; obvious
+secret files such as `.env` are skipped.
 
 ## Development
 
