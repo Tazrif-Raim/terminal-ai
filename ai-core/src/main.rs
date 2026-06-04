@@ -72,6 +72,16 @@ fn run(cli: Cli) -> ExitCode {
         eprintln!("Prompt: {prompt}");
     }
 
+    let options = match llm::generate_options(&resolved_config, &prompt) {
+        Ok(options) => options,
+        Err(error) => {
+            eprintln!("{error}");
+            return ExitCode::from(1);
+        }
+    };
+
+    eprintln!("{}", llm::format_options(&options));
+
     ExitCode::SUCCESS
 }
 

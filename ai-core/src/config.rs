@@ -227,7 +227,10 @@ fn load_partial_from_path(
         api_key: env_value(ENV_API_KEY, &env_lookup).or_else(|| clean(file_config.api_key)),
         model: env_value(ENV_MODEL, &env_lookup).or_else(|| clean(file_config.model)),
         default_shell: clean(file_config.default_shell).unwrap_or_else(default_shell),
-        max_options: file_config.max_options.unwrap_or(DEFAULT_MAX_OPTIONS),
+        max_options: file_config
+            .max_options
+            .unwrap_or(DEFAULT_MAX_OPTIONS)
+            .clamp(1, 3),
     })
 }
 
@@ -413,6 +416,24 @@ mod tests {
             .redacted();
 
         assert_eq!(config.api_key.as_deref(), Some("secr...-key"));
+    }
+
+    #[test]
+    fn clamps_max_options_to_supported_range() {
+        let path = test_config_path("clamps_max_options_to_supported_range");
+        write_config(
+            &path,
+            r#"{
+                "api_url": "https://example.test",
+                "api_key": "secret-test-key",
+                "model": "model",
+                "max_options": 99
+            }"#,
+        );
+
+        let config = load_from_path(&path, |_| None).expect("load config");
+
+        assert_eq!(config.max_options, 3);
     }
 
     fn test_config_path(name: &str) -> PathBuf {

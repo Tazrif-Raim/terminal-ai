@@ -158,14 +158,14 @@ Linux/macOS:
 
 Goal: generate 1-3 command options.
 
-- [ ] Build OpenAI-compatible chat completions request.
-- [ ] Send current OS and shell context.
-- [ ] Start with PowerShell as primary target on Windows.
-- [ ] Use low temperature.
-- [ ] Ask the model to return JSON only.
-- [ ] Parse JSON response into typed Rust structs.
-- [ ] Validate command options.
-- [ ] Limit options to 1-3.
+- [x] Build OpenAI-compatible chat completions request.
+- [x] Send current OS and shell context.
+- [x] Start with PowerShell as primary target on Windows.
+- [x] Use low temperature.
+- [x] Ask the model to return JSON only.
+- [x] Parse JSON response into typed Rust structs.
+- [x] Validate command options.
+- [x] Limit options to 1-3.
 
 Expected LLM response shape:
 
@@ -181,20 +181,20 @@ Expected LLM response shape:
 }
 ```
 
-- [ ] Implement fallback parsing if model returns markdown/code fences.
-- [ ] Show helpful error if LLM response cannot be parsed.
-- [ ] Add retry only for malformed JSON, not for every error.
+- [x] Implement fallback parsing if model returns markdown/code fences.
+- [x] Show helpful error if LLM response cannot be parsed.
+- [x] Add retry only for malformed JSON, not for every error.
 
 System prompt requirements:
 
-- [ ] Return JSON only.
-- [ ] Return 1-3 options.
-- [ ] Target the detected OS and shell.
-- [ ] Prefer PowerShell commands on Windows.
-- [ ] Prefer inspection commands before destructive commands.
-- [ ] Never invent unknown file paths, container names, branches, PIDs, or process names.
-- [ ] Mark risky commands as `dangerous`.
-- [ ] Keep explanations brief.
+- [x] Return JSON only.
+- [x] Return 1-3 options.
+- [x] Target the detected OS and shell.
+- [x] Prefer PowerShell commands on Windows.
+- [x] Prefer inspection commands before destructive commands.
+- [x] Never invent unknown file paths, container names, branches, PIDs, or process names.
+- [x] Mark risky commands as `dangerous`.
+- [x] Keep explanations brief.
 
 ---
 
