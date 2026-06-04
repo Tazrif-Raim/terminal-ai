@@ -415,33 +415,49 @@ docker compose ps
 
 ## Phase 9 — Better UX Polish
 
-- [ ] Add loading state:
+- [x] Add loading state:
 
 ```txt
 thinking...
 ```
 
-- [ ] Show API errors cleanly.
-- [ ] Show invalid JSON errors cleanly.
-- [ ] Add timeout handling.
-- [ ] Add cancel during LLM request.
-- [ ] Add option to regenerate.
-- [ ] Add option to copy selected command.
-- [ ] Add keybindings:
-  - [ ] `r` = regenerate.
-  - [ ] `c` = copy command.
-  - [ ] `?` = show help.
+- [x] Show API errors cleanly.
+- [x] Show invalid JSON errors cleanly.
+- [x] Add timeout handling.
+- [x] Add cancel during LLM request.
+- [x] Add color to picker UI.
+  - [x] Picker UI marker should point to the command not the description.
+    - [x] Example:
+```txt
+  Show process using port 3000
+  > Get-NetTCPConnection -LocalPort 3000 | Select-Object LocalAddress,LocalPort,OwningProcess
 
-- [ ] Add color-coded risk labels.
-- [ ] Add config for max options.
-- [ ] Add command history file.
-- [ ] Add prompt history file.
-- [ ] Add ability to disable telemetry entirely if any telemetry is ever considered.
-- [ ] Default to no telemetry.
+  Show owning process details
+  Get-Process -Id <PID>
+```
+- [x] Add color-coded risk labels.
+- [x] Add config for max options.
+- [x] Add config for hide descriptions and show only commands.
+- [x] Add prompt-response history file.
+- [x] Add ability to disable telemetry entirely if any telemetry is ever considered.
+- [x] Default to no telemetry.
 
 ---
 
-## Phase 10 — Unix Shell Support
+## Phase 10 — Improved PowerShell UX
+
+Goal: fix edit mode and other UX improvements.
+
+PowerShell:
+
+- [ ] Revisit command-mode edit UX:
+  - [ ] Desired behavior: `ai <prompt>` -> pick option -> `e` places selected command into a fresh editable terminal line without running it.
+  - [ ] Current command-mode fallback: `e` copies the selected command to clipboard for manual paste/edit.
+  - [ ] Investigate whether this is possible outside a PSReadLine key handler without terminal repaint glitches.
+
+---
+
+## Phase 11 — Unix Shell Support
 
 Goal: keep Rust core, add shell wrappers.
 
@@ -483,44 +499,6 @@ commandline -i "$command"
 
 ---
 
-## Phase 11 — Ctrl+I Keybinding Mode
-
-Goal: add Copilot-like keybinding later.
-
-PowerShell:
-
-- [ ] Investigate `Set-PSReadLineKeyHandler`.
-- [ ] Bind `Ctrl+i` to open prompt UI.
-- [ ] Allow prompt from empty terminal line.
-- [ ] Allow selected command to be inserted into current PSReadLine buffer.
-- [ ] Revisit command-mode edit UX:
-  - [ ] Desired behavior: `ai <prompt>` -> pick option -> `e` places selected command into a fresh editable prompt line without running it.
-  - [ ] Current command-mode fallback: `e` copies the selected command to clipboard for manual paste/edit.
-  - [ ] Investigate whether this is possible outside a PSReadLine key handler without terminal repaint glitches.
-  - [ ] Prefer keybinding mode if it is the only reliable way to own the active PSReadLine buffer.
-- [ ] Add config toggle for keybinding install.
-- [ ] Avoid overriding existing keybinding without confirmation.
-
-Future UX:
-
-```txt
-Ctrl+i -> prompt box -> options -> insert/run
-```
-
-- [ ] Consider separate mode:
-
-```powershell
-ai-keybind
-```
-
-- [ ] Keep normal command mode working:
-
-```powershell
-ai what is running on port 3000
-```
-
----
-
 ## Phase 12 — Packaging and Install
 
 Windows:
@@ -551,7 +529,7 @@ Linux/macOS:
 
 General:
 
-- [ ] Add GitHub Releases.
+- [ ] Add GitHub Releases manually or via GitHub Actions (if possible).
 - [ ] Add checksums.
 - [ ] Add signed binaries later.
 - [ ] Add README badges.
@@ -643,11 +621,7 @@ Known limitations to document:
 
 ## Phase 15 — Future Ideas
 
-- [ ] Local model support.
-- [ ] Multiple provider support.
-- [ ] Provider fallback.
-- [ ] Command explanation mode.
-- [ ] Dry-run mode.
+- [ ] Agentic mode for multi-step tasks.
 - [ ] Project-specific instructions file:
 
 ```txt
@@ -660,8 +634,6 @@ Known limitations to document:
 - [ ] Add command aliases.
 - [ ] Add “fix last command error” mode.
 - [ ] Capture last command output optionally.
-- [ ] Add terminal overlay app later.
-- [ ] Add Windows Terminal/VS Code terminal hotkey integration later.
 - [ ] Add plugin system for common tools:
   - [ ] Docker
   - [ ] Git

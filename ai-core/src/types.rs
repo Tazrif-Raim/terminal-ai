@@ -26,6 +26,8 @@ pub(crate) enum Risk {
 pub(crate) enum PickerResult {
     Run { command: String },
     Edit { command: String },
+    Copy { command: String },
+    Regenerate,
     Cancel,
 }
 
@@ -82,6 +84,16 @@ impl PickerResult {
         Self::Edit {
             command: command.into(),
         }
+    }
+
+    pub(crate) fn copy(command: impl Into<String>) -> Self {
+        Self::Copy {
+            command: command.into(),
+        }
+    }
+
+    pub(crate) fn regenerate() -> Self {
+        Self::Regenerate
     }
 
     pub(crate) fn cancel() -> Self {
@@ -149,6 +161,14 @@ mod tests {
         assert_eq!(
             PickerResult::edit("Get-Process").to_json(),
             r#"{"action":"edit","command":"Get-Process"}"#
+        );
+        assert_eq!(
+            PickerResult::copy("Get-Process").to_json(),
+            r#"{"action":"copy","command":"Get-Process"}"#
+        );
+        assert_eq!(
+            PickerResult::regenerate().to_json(),
+            r#"{"action":"regenerate"}"#
         );
         assert_eq!(PickerResult::cancel().to_json(), r#"{"action":"cancel"}"#);
     }

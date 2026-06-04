@@ -8,7 +8,7 @@ use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute, queue,
-    style::{Attribute, Print, SetAttribute},
+    style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
@@ -25,6 +25,8 @@ pub(crate) enum PickerError {
 enum PickerAction {
     Run,
     Edit,
+    Copy,
+    Regenerate,
     Cancel,
 }
 
@@ -93,6 +95,10 @@ impl PickerState {
             }
             KeyCode::Enter => Some(PickerAction::Run),
             KeyCode::Char(value) if value.eq_ignore_ascii_case(&'e') => Some(PickerAction::Edit),
+            KeyCode::Char(value) if value.eq_ignore_ascii_case(&'c') => Some(PickerAction::Copy),
+            KeyCode::Char(value) if value.eq_ignore_ascii_case(&'r') => {
+                Some(PickerAction::Regenerate)
+            }
             KeyCode::Char(value) if value.eq_ignore_ascii_case(&'q') => Some(PickerAction::Cancel),
             KeyCode::Esc => Some(PickerAction::Cancel),
             _ => None,
@@ -105,6 +111,10 @@ impl PickerState {
             PickerAction::Edit => {
                 PickerResult::edit(options.options[self.selected].command.clone())
             }
+            PickerAction::Copy => {
+                PickerResult::copy(options.options[self.selected].command.clone())
+            }
+            PickerAction::Regenerate => PickerResult::regenerate(),
             PickerAction::Cancel => PickerResult::cancel(),
         }
     }
@@ -129,6 +139,7 @@ impl From<io::Error> for PickerError {
 pub(crate) fn pick(
     options: &CommandOptions,
     dangerous_requires_confirm: bool,
+    hide_descriptions: bool,
 ) -> Result<PickerResult, PickerError> {
     if !io::stderr().is_terminal() {
         return Ok(PickerResult::cancel());
@@ -140,7 +151,7 @@ pub(crate) fn pick(
     let mut last_navigation = None;
 
     drain_pending_events()?;
-    render(&mut stderr, options, state.selected())?;
+    render(&mut stderr, options, &state, hide_descriptions)?;
 
     loop {
         if let Event::Key(key) = event::read()? {
@@ -167,7 +178,7 @@ pub(crate) fn pick(
                 return Ok(state.result(options, action));
             }
 
-            render(&mut stderr, options, state.selected())?;
+            render(&mut stderr, options, &state, hide_descriptions)?;
         }
     }
 }
@@ -186,34 +197,89 @@ fn requires_dangerous_confirmation(
 fn render(
     stderr: &mut Stderr,
     options: &CommandOptions,
-    selected: usize,
+    state: &PickerState,
+    hide_descriptions: bool,
 ) -> Result<(), PickerError> {
     queue!(stderr, cursor::MoveTo(0, 0), Clear(ClearType::All))?;
     queue!(stderr, Print("Select command\r\n\r\n"))?;
 
     for (index, option) in options.options.iter().enumerate() {
-        if index == selected {
-            queue!(stderr, SetAttribute(Attribute::Reverse))?;
-            queue!(
-                stderr,
-                Print(format!("> {} [{}]\r\n", option.title, option.risk))
-            )?;
-            queue!(stderr, SetAttribute(Attribute::Reset))?;
-        } else {
-            queue!(
-                stderr,
-                Print(format!("  {} [{}]\r\n", option.title, option.risk))
-            )?;
-        }
+        let is_selected = index == state.selected();
 
-        queue!(stderr, Print(format!("  {}\r\n\r\n", option.command)))?;
+        if hide_descriptions {
+            render_command_only_option(stderr, &option.command, option.risk, is_selected)?;
+        } else if is_selected {
+            queue!(stderr, SetAttribute(Attribute::Bold))?;
+            queue!(stderr, Print(format!("  {} ", option.title)))?;
+            render_risk_label(stderr, option.risk)?;
+            queue!(stderr, SetAttribute(Attribute::Reset), Print("\r\n"))?;
+            queue!(
+                stderr,
+                SetForegroundColor(Color::Cyan),
+                Print("> "),
+                ResetColor
+            )?;
+            queue!(stderr, SetAttribute(Attribute::Reverse))?;
+            queue!(stderr, Print(&option.command))?;
+            queue!(stderr, SetAttribute(Attribute::Reset), Print("\r\n\r\n"))?;
+        } else {
+            queue!(stderr, Print(format!("  {} ", option.title)))?;
+            render_risk_label(stderr, option.risk)?;
+            queue!(stderr, Print("\r\n"))?;
+            queue!(stderr, Print(format!("  {}\r\n\r\n", option.command)))?;
+        }
     }
 
     queue!(
         stderr,
-        Print("Up/Down or w/s = select | Enter = run | e = copy/edit | q = cancel")
+        Print(
+            "Up/Down or w/s = select | Enter = run | e = edit | c = copy | r = regenerate | q/Esc = cancel"
+        )
     )?;
+
     stderr.flush()?;
+
+    Ok(())
+}
+
+fn render_command_only_option(
+    stderr: &mut Stderr,
+    command: &str,
+    risk: Risk,
+    is_selected: bool,
+) -> Result<(), PickerError> {
+    if is_selected {
+        queue!(
+            stderr,
+            SetForegroundColor(Color::Cyan),
+            Print("> "),
+            ResetColor
+        )?;
+        queue!(stderr, SetAttribute(Attribute::Reverse), Print(command))?;
+        queue!(stderr, SetAttribute(Attribute::Reset), Print(" "))?;
+        render_risk_label(stderr, risk)?;
+        queue!(stderr, Print("\r\n\r\n"))?;
+    } else {
+        queue!(stderr, Print(format!("  {command} ")))?;
+        render_risk_label(stderr, risk)?;
+        queue!(stderr, Print("\r\n\r\n"))?;
+    }
+
+    Ok(())
+}
+
+fn render_risk_label(stderr: &mut Stderr, risk: Risk) -> Result<(), PickerError> {
+    let color = match risk {
+        Risk::Safe => Color::Green,
+        Risk::Dangerous => Color::Red,
+    };
+
+    queue!(
+        stderr,
+        SetForegroundColor(color),
+        Print(format!("[{risk}]")),
+        ResetColor
+    )?;
 
     Ok(())
 }
@@ -227,7 +293,9 @@ fn render_dangerous_confirmation(
 
     queue!(stderr, cursor::MoveTo(0, 0), Clear(ClearType::All))?;
     queue!(stderr, Print("Dangerous command\r\n\r\n"))?;
-    queue!(stderr, Print(format!("{} [dangerous]\r\n", option.title)))?;
+    queue!(stderr, Print(format!("{} ", option.title)))?;
+    render_risk_label(stderr, option.risk)?;
+    queue!(stderr, Print("\r\n"))?;
     queue!(stderr, Print(format!("{}\r\n\r\n", option.command)))?;
     queue!(
         stderr,
@@ -378,6 +446,14 @@ mod tests {
             Some(PickerAction::Edit)
         );
         assert_eq!(
+            state.handle_key(key(KeyCode::Char('c'))),
+            Some(PickerAction::Copy)
+        );
+        assert_eq!(
+            state.handle_key(key(KeyCode::Char('r'))),
+            Some(PickerAction::Regenerate)
+        );
+        assert_eq!(
             state.handle_key(key(KeyCode::Char('q'))),
             Some(PickerAction::Cancel)
         );
@@ -403,6 +479,14 @@ mod tests {
         assert_eq!(
             state.result(&options(), PickerAction::Edit),
             PickerResult::edit("Get-Service")
+        );
+        assert_eq!(
+            state.result(&options(), PickerAction::Copy),
+            PickerResult::copy("Get-Service")
+        );
+        assert_eq!(
+            state.result(&options(), PickerAction::Regenerate),
+            PickerResult::regenerate()
         );
         assert_eq!(
             state.result(&options(), PickerAction::Cancel),
@@ -445,6 +529,18 @@ mod tests {
             &options,
             1,
             PickerAction::Edit,
+            true
+        ));
+        assert!(!requires_dangerous_confirmation(
+            &options,
+            1,
+            PickerAction::Copy,
+            true
+        ));
+        assert!(!requires_dangerous_confirmation(
+            &options,
+            1,
+            PickerAction::Regenerate,
             true
         ));
     }

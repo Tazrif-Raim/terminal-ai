@@ -2,6 +2,7 @@ use std::{fmt, path::PathBuf, time::Duration};
 
 use reqwest::{StatusCode, blocking::Client};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     config::ResolvedConfig,
@@ -11,13 +12,12 @@ use crate::{
 };
 
 const TEMPERATURE: f32 = 0.1;
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
-
 #[derive(Debug)]
 pub(crate) enum LlmError {
     ClientBuild(reqwest::Error),
     Request(reqwest::Error),
-    ApiStatus { status: StatusCode, body: String },
+    Timeout { seconds: u64 },
+    ApiStatus { status: StatusCode, message: String },
     ApiResponse(serde_json::Error),
     EmptyMessage,
     ResponseParse(serde_json::Error),
@@ -61,25 +61,31 @@ impl fmt::Display for LlmError {
                     "error: could not initialize LLM HTTP client: {source}"
                 )
             }
-            Self::Request(source) => write!(formatter, "error: LLM request failed: {source}"),
-            Self::ApiStatus { status, body } => {
-                write!(formatter, "error: LLM API returned HTTP {status}: {body}")
+            Self::Request(source) => write!(formatter, "error: could not reach LLM API: {source}"),
+            Self::Timeout { seconds } => {
+                write!(formatter, "error: LLM request timed out after {seconds}s")
+            }
+            Self::ApiStatus { status, message } => {
+                write!(
+                    formatter,
+                    "error: LLM API returned HTTP {status}: {message}"
+                )
             }
             Self::ApiResponse(source) => {
                 write!(
                     formatter,
-                    "error: could not parse LLM API response: {source}"
+                    "error: LLM API response was not valid JSON: {source}"
                 )
             }
             Self::EmptyMessage => write!(formatter, "error: LLM response did not include content"),
             Self::ResponseParse(source) => write!(
                 formatter,
-                "error: could not parse LLM response as command options: {source}"
+                "error: model response was not valid command JSON: {source}"
             ),
             Self::InvalidOptions(source) => {
                 write!(
                     formatter,
-                    "error: invalid command options from LLM: {source}"
+                    "error: model response contained invalid command options: {source}"
                 )
             }
         }
@@ -94,7 +100,7 @@ pub(crate) fn generate_options(
     files: &[PathBuf],
 ) -> Result<CommandOptions, LlmError> {
     let client = Client::builder()
-        .timeout(REQUEST_TIMEOUT)
+        .timeout(Duration::from_secs(config.request_timeout_seconds))
         .build()
         .map_err(LlmError::ClientBuild)?;
 
@@ -158,20 +164,32 @@ fn send_chat_request(
         .bearer_auth(&config.api_key)
         .json(request)
         .send()
-        .map_err(LlmError::Request)?;
+        .map_err(|source| request_error(source, config.request_timeout_seconds))?;
 
     let status = response.status();
-    let body = response.text().map_err(LlmError::Request)?;
+    let body = response
+        .text()
+        .map_err(|source| request_error(source, config.request_timeout_seconds))?;
 
     if !status.is_success() {
         return Err(LlmError::ApiStatus {
             status,
-            body: trim_error_body(&body),
+            message: clean_api_error_message(&body),
         });
     }
 
     let response: ChatResponse = serde_json::from_str(&body).map_err(LlmError::ApiResponse)?;
     first_message_content(response)
+}
+
+fn request_error(source: reqwest::Error, timeout_seconds: u64) -> LlmError {
+    if source.is_timeout() {
+        LlmError::Timeout {
+            seconds: timeout_seconds,
+        }
+    } else {
+        LlmError::Request(source)
+    }
 }
 
 fn first_message_content(response: ChatResponse) -> Result<String, LlmError> {
@@ -228,11 +246,28 @@ fn trim_error_body(body: &str) -> String {
     truncated
 }
 
+fn clean_api_error_message(body: &str) -> String {
+    if let Ok(value) = serde_json::from_str::<Value>(body) {
+        if let Some(message) = value
+            .get("error")
+            .and_then(|error| error.get("message"))
+            .and_then(Value::as_str)
+            .or_else(|| value.get("message").and_then(Value::as_str))
+            .map(str::trim)
+            .filter(|message| !message.is_empty())
+        {
+            return trim_error_body(message);
+        }
+    }
+
+    trim_error_body(body)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        LlmError, build_chat_request, extract_json, generate_options_with_sender,
-        parse_command_options,
+        LlmError, build_chat_request, clean_api_error_message, extract_json,
+        generate_options_with_sender, parse_command_options,
     };
     use crate::{config::ResolvedConfig, types::Risk};
 
@@ -288,6 +323,14 @@ mod tests {
     }
 
     #[test]
+    fn extracts_clean_api_error_message() {
+        assert_eq!(
+            clean_api_error_message(r#"{"error":{"message":"invalid api key"}}"#),
+            "invalid api key"
+        );
+    }
+
+    #[test]
     fn retries_once_when_assistant_content_is_malformed_json() {
         let config = config();
         let mut calls = 0;
@@ -330,6 +373,9 @@ mod tests {
             send_context: true,
             send_recent_commands: true,
             max_recent_commands: 5,
+            request_timeout_seconds: 60,
+            telemetry_enabled: false,
+            hide_descriptions: false,
         }
     }
 }

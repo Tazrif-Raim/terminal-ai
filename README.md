@@ -55,13 +55,19 @@ ai summarize these files --files README.md docs\TODO.md
 
 `Enter` in the picker runs the selected command in the current PowerShell
 session. `e` copies the selected command to your clipboard so you can paste,
-edit, and run it manually. `q` and `Esc` cancel.
+edit, and run it manually. `c` copies, `r` regenerates options, and `q`/`Esc`
+cancel.
 
 By default, `ai-core` sends lightweight local context to the LLM: current
 directory, shell/OS metadata, git branch/repo status, recent commit hashes,
 detected project files, and recent commands with likely secrets filtered out.
 File contents are not sent unless explicitly passed with `--files`; obvious
 secret files such as `.env` are skipped.
+
+Selected commands are appended to a local `commands.jsonl` history file, and
+prompt/options pairs are appended to `prompt-responses.jsonl`. These are local
+only. There is no telemetry, and the resolved config defaults
+`telemetry_enabled` to `false`.
 
 ## Development
 
@@ -82,6 +88,10 @@ LLM_API_URL
 LLM_API_KEY
 LLM_MODEL
 ```
+
+Optional config-file fields include `max_options`, `request_timeout_seconds`,
+`hide_descriptions`, `send_context`, `send_recent_commands`, and
+`max_recent_commands`.
 
 ```powershell
 cd ai-core

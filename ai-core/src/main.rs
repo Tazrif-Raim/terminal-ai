@@ -1,6 +1,8 @@
 mod config;
 mod context;
+mod history;
 mod llm;
+mod loading;
 mod picker;
 mod prompt;
 mod safety;
@@ -12,6 +14,8 @@ use std::{
 };
 
 use clap::Parser;
+
+use crate::types::PickerResult;
 
 const USAGE: &str = "Usage: ai <what do you want to do?>";
 
@@ -78,24 +82,40 @@ fn run(cli: Cli) -> ExitCode {
         eprintln!("Prompt: {prompt}");
     }
 
-    let options = match llm::generate_options(&resolved_config, &prompt, &input.files) {
-        Ok(options) => options,
-        Err(error) => {
-            eprintln!("{error}");
-            return ExitCode::from(1);
-        }
-    };
-    let options = safety::apply_overrides(options);
+    loop {
+        let options = match loading::generate_options(&resolved_config, &prompt, &input.files) {
+            Ok(loading::LoadingResult::Options(options)) => options,
+            Ok(loading::LoadingResult::Cancelled) => {
+                return print_result(PickerResult::cancel(), cli.shell_mode);
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                return ExitCode::from(1);
+            }
+        };
+        let options = safety::apply_overrides(options);
+        history::record_prompt_response(&prompt, &options);
 
-    let result = match picker::pick(&options, resolved_config.dangerous_requires_confirm) {
-        Ok(result) => result,
-        Err(error) => {
-            eprintln!("{error}");
-            return ExitCode::from(1);
-        }
-    };
+        let result = match picker::pick(
+            &options,
+            resolved_config.dangerous_requires_confirm,
+            resolved_config.hide_descriptions,
+        ) {
+            Ok(PickerResult::Regenerate) => continue,
+            Ok(result) => result,
+            Err(error) => {
+                eprintln!("{error}");
+                return ExitCode::from(1);
+            }
+        };
 
-    if cli.shell_mode {
+        history::record_command(&result);
+        return print_result(result, cli.shell_mode);
+    }
+}
+
+fn print_result(result: PickerResult, shell_mode: bool) -> ExitCode {
+    if shell_mode {
         println!("{}", result.to_json());
     } else {
         eprintln!("{}", result.to_json());

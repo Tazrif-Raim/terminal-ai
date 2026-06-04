@@ -16,6 +16,9 @@ const DEFAULT_DANGEROUS_REQUIRES_CONFIRM: bool = true;
 const DEFAULT_SEND_CONTEXT: bool = true;
 const DEFAULT_SEND_RECENT_COMMANDS: bool = true;
 const DEFAULT_MAX_RECENT_COMMANDS: usize = 10;
+const DEFAULT_REQUEST_TIMEOUT_SECONDS: u64 = 60;
+const DEFAULT_TELEMETRY_ENABLED: bool = false;
+const DEFAULT_HIDE_DESCRIPTIONS: bool = false;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedConfig {
@@ -28,6 +31,9 @@ pub(crate) struct ResolvedConfig {
     pub(crate) send_context: bool,
     pub(crate) send_recent_commands: bool,
     pub(crate) max_recent_commands: usize,
+    pub(crate) request_timeout_seconds: u64,
+    pub(crate) telemetry_enabled: bool,
+    pub(crate) hide_descriptions: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +47,9 @@ pub(crate) struct PartialConfig {
     send_context: bool,
     send_recent_commands: bool,
     max_recent_commands: usize,
+    request_timeout_seconds: u64,
+    telemetry_enabled: bool,
+    hide_descriptions: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -54,6 +63,9 @@ pub(crate) struct RedactedConfig {
     send_context: bool,
     send_recent_commands: bool,
     max_recent_commands: usize,
+    request_timeout_seconds: u64,
+    telemetry_enabled: bool,
+    hide_descriptions: bool,
 }
 
 #[derive(Debug)]
@@ -96,6 +108,9 @@ struct FileConfig {
     send_context: Option<bool>,
     send_recent_commands: Option<bool>,
     max_recent_commands: Option<usize>,
+    request_timeout_seconds: Option<u64>,
+    telemetry_enabled: Option<bool>,
+    hide_descriptions: Option<bool>,
 }
 
 impl ResolvedConfig {
@@ -110,6 +125,9 @@ impl ResolvedConfig {
             send_context: self.send_context,
             send_recent_commands: self.send_recent_commands,
             max_recent_commands: self.max_recent_commands,
+            request_timeout_seconds: self.request_timeout_seconds,
+            telemetry_enabled: self.telemetry_enabled,
+            hide_descriptions: self.hide_descriptions,
         }
     }
 }
@@ -126,6 +144,9 @@ impl PartialConfig {
             send_context: self.send_context,
             send_recent_commands: self.send_recent_commands,
             max_recent_commands: self.max_recent_commands,
+            request_timeout_seconds: self.request_timeout_seconds,
+            telemetry_enabled: self.telemetry_enabled,
+            hide_descriptions: self.hide_descriptions,
         }
     }
 
@@ -154,6 +175,9 @@ impl PartialConfig {
             send_context: self.send_context,
             send_recent_commands: self.send_recent_commands,
             max_recent_commands: self.max_recent_commands,
+            request_timeout_seconds: self.request_timeout_seconds,
+            telemetry_enabled: self.telemetry_enabled,
+            hide_descriptions: self.hide_descriptions,
         })
     }
 
@@ -301,6 +325,16 @@ fn load_partial_from_path(
             .max_recent_commands
             .unwrap_or(DEFAULT_MAX_RECENT_COMMANDS)
             .min(20),
+        request_timeout_seconds: file_config
+            .request_timeout_seconds
+            .unwrap_or(DEFAULT_REQUEST_TIMEOUT_SECONDS)
+            .clamp(5, 300),
+        telemetry_enabled: file_config
+            .telemetry_enabled
+            .unwrap_or(DEFAULT_TELEMETRY_ENABLED),
+        hide_descriptions: file_config
+            .hide_descriptions
+            .unwrap_or(DEFAULT_HIDE_DESCRIPTIONS),
     })
 }
 
@@ -475,7 +509,10 @@ mod tests {
                 "dangerous_requires_confirm": false,
                 "send_context": false,
                 "send_recent_commands": false,
-                "max_recent_commands": 3
+                "max_recent_commands": 3,
+                "request_timeout_seconds": 30,
+                "telemetry_enabled": true,
+                "hide_descriptions": true
             }"#,
         );
 
@@ -490,6 +527,9 @@ mod tests {
         assert!(!config.send_context);
         assert!(!config.send_recent_commands);
         assert_eq!(config.max_recent_commands, 3);
+        assert_eq!(config.request_timeout_seconds, 30);
+        assert!(config.telemetry_enabled);
+        assert!(config.hide_descriptions);
     }
 
     #[test]
@@ -599,6 +639,9 @@ mod tests {
         assert!(config.send_context);
         assert!(config.send_recent_commands);
         assert_eq!(config.max_recent_commands, 10);
+        assert_eq!(config.request_timeout_seconds, 60);
+        assert!(!config.telemetry_enabled);
+        assert!(!config.hide_descriptions);
     }
 
     #[test]
@@ -617,6 +660,24 @@ mod tests {
         let config = load_from_path(&path, |_| None).expect("load config");
 
         assert_eq!(config.max_recent_commands, 20);
+    }
+
+    #[test]
+    fn clamps_request_timeout_to_reasonable_range() {
+        let path = test_config_path("clamps_request_timeout_to_reasonable_range");
+        write_config(
+            &path,
+            r#"{
+                "api_url": "https://example.test",
+                "api_key": "secret-test-key",
+                "model": "model",
+                "request_timeout_seconds": 1
+            }"#,
+        );
+
+        let config = load_from_path(&path, |_| None).expect("load config");
+
+        assert_eq!(config.request_timeout_seconds, 5);
     }
 
     #[test]

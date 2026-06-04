@@ -67,6 +67,14 @@ function ai {
             Copy-TerminalAiCommand $result.command
             return
         }
+        'copy' {
+            if ([string]::IsNullOrWhiteSpace($result.command)) {
+                return
+            }
+
+            Copy-TerminalAiCommand $result.command
+            return
+        }
         'run' {
             if ([string]::IsNullOrWhiteSpace($result.command)) {
                 return

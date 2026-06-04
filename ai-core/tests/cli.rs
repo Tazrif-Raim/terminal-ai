@@ -164,6 +164,9 @@ fn print_config_writes_redacted_json_to_stdout() {
     assert!(stdout.contains("\"send_context\": true"));
     assert!(stdout.contains("\"send_recent_commands\": true"));
     assert!(stdout.contains("\"max_recent_commands\": 10"));
+    assert!(stdout.contains("\"request_timeout_seconds\": 60"));
+    assert!(stdout.contains("\"telemetry_enabled\": false"));
+    assert!(stdout.contains("\"hide_descriptions\": false"));
     assert!(!stdout.contains("test-secret-key"));
 }
 
