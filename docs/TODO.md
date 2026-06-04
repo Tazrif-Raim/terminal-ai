@@ -219,22 +219,22 @@ Select command
 ↑/↓ or a/s = select | Enter = run | e = edit | q = cancel
 ```
 
-- [ ] Use `crossterm` raw mode.
-- [ ] Render 1-3 options.
-- [ ] Support selection keys:
-  - [ ] Up arrow = previous option.
-  - [ ] Down arrow = next option.
-  - [ ] `a` = previous option.
-  - [ ] `s` = next option.
-  - [ ] `Enter` = run.
-  - [ ] `e` = edit/insert only.
-  - [ ] `q` = cancel.
-  - [ ] `Esc` = cancel.
-  - [ ] `Ctrl+C` = cancel and restore terminal.
+- [x] Use `crossterm` raw mode.
+- [x] Render 1-3 options.
+- [x] Support selection keys:
+  - [x] Up arrow = previous option.
+  - [x] Down arrow = next option.
+  - [x] `a` = previous option.
+  - [x] `s` = next option.
+  - [x] `Enter` = run.
+  - [x] `e` = edit/insert only.
+  - [x] `q` = cancel.
+  - [x] `Esc` = cancel.
+  - [x] `Ctrl+C` = cancel and restore terminal.
 
-- [ ] Always restore terminal state on exit.
-- [ ] Clear picker UI before returning to shell.
-- [ ] Print only final JSON to stdout in shell mode.
+- [x] Always restore terminal state on exit.
+- [x] Clear picker UI before returning to shell.
+- [x] Print only final JSON to stdout in shell mode.
 
 Final stdout examples:
 

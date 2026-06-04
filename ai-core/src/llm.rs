@@ -222,36 +222,13 @@ fn trim_error_body(body: &str) -> String {
     truncated
 }
 
-pub(crate) fn format_options(options: &CommandOptions) -> String {
-    let mut output = String::new();
-
-    for (index, option) in options.options.iter().enumerate() {
-        if index > 0 {
-            output.push('\n');
-        }
-
-        output.push_str(&format!(
-            "{}. {} [{}]\n   {}",
-            index + 1,
-            option.title,
-            option.risk,
-            option.command
-        ));
-    }
-
-    output
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        LlmError, build_chat_request, extract_json, format_options, generate_options_with_sender,
+        LlmError, build_chat_request, extract_json, generate_options_with_sender,
         parse_command_options,
     };
-    use crate::{
-        config::ResolvedConfig,
-        types::{CommandOptions, Risk},
-    };
+    use crate::{config::ResolvedConfig, types::Risk};
 
     #[test]
     fn builds_openai_compatible_chat_request() {
@@ -334,20 +311,6 @@ mod tests {
 
         assert_eq!(calls, 1);
         assert!(matches!(error, LlmError::InvalidOptions(_)));
-    }
-
-    #[test]
-    fn formats_options_for_terminal_output() {
-        let output = format_options(&CommandOptions {
-            options: vec![crate::types::CommandOption {
-                title: "Show processes".to_owned(),
-                command: "Get-Process".to_owned(),
-                risk: Risk::Safe,
-            }],
-        });
-
-        assert!(output.contains("1. Show processes [safe]"));
-        assert!(output.contains("Get-Process"));
     }
 
     fn config() -> ResolvedConfig {

@@ -80,7 +80,19 @@ fn run(cli: Cli) -> ExitCode {
         }
     };
 
-    eprintln!("{}", llm::format_options(&options));
+    let result = match picker::pick(&options) {
+        Ok(result) => result,
+        Err(error) => {
+            eprintln!("{error}");
+            return ExitCode::from(1);
+        }
+    };
+
+    if cli.shell_mode {
+        println!("{}", result.to_json());
+    } else {
+        eprintln!("{}", result.to_json());
+    }
 
     ExitCode::SUCCESS
 }

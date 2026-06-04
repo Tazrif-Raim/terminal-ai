@@ -21,6 +21,14 @@ pub(crate) enum Risk {
     Dangerous,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(tag = "action", rename_all = "lowercase")]
+pub(crate) enum PickerResult {
+    Run { command: String },
+    Edit { command: String },
+    Cancel,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum OptionsValidationError {
     Empty,
@@ -63,6 +71,28 @@ impl fmt::Display for Risk {
     }
 }
 
+impl PickerResult {
+    pub(crate) fn run(command: impl Into<String>) -> Self {
+        Self::Run {
+            command: command.into(),
+        }
+    }
+
+    pub(crate) fn edit(command: impl Into<String>) -> Self {
+        Self::Edit {
+            command: command.into(),
+        }
+    }
+
+    pub(crate) fn cancel() -> Self {
+        Self::Cancel
+    }
+
+    pub(crate) fn to_json(&self) -> String {
+        serde_json::to_string(self).expect("picker result serializes")
+    }
+}
+
 impl fmt::Display for OptionsValidationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -81,7 +111,7 @@ impl std::error::Error for OptionsValidationError {}
 
 #[cfg(test)]
 mod tests {
-    use super::{CommandOption, CommandOptions, OptionsValidationError, Risk};
+    use super::{CommandOption, CommandOptions, OptionsValidationError, PickerResult, Risk};
 
     #[test]
     fn normalizes_and_limits_options() {
@@ -108,6 +138,19 @@ mod tests {
             .expect_err("empty options");
 
         assert_eq!(error, OptionsValidationError::Empty);
+    }
+
+    #[test]
+    fn serializes_picker_results_for_shell_wrapper() {
+        assert_eq!(
+            PickerResult::run("Get-Process").to_json(),
+            r#"{"action":"run","command":"Get-Process"}"#
+        );
+        assert_eq!(
+            PickerResult::edit("Get-Process").to_json(),
+            r#"{"action":"edit","command":"Get-Process"}"#
+        );
+        assert_eq!(PickerResult::cancel().to_json(), r#"{"action":"cancel"}"#);
     }
 
     fn option(title: &str, command: &str, risk: Risk) -> CommandOption {

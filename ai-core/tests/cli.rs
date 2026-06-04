@@ -55,8 +55,7 @@ fn accepts_unquoted_prompt_without_stdout() {
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("Prompt: what is running on port 3000"));
-    assert!(stderr.contains("1. Show process using port 3000 [safe]"));
-    assert!(stderr.contains("Get-NetTCPConnection -LocalPort 3000"));
+    assert!(stderr.contains(r#"{"action":"cancel"}"#));
 
     let request = server.request();
     assert!(request.contains("test-model"));
@@ -69,7 +68,7 @@ fn accepts_unquoted_prompt_without_stdout() {
 }
 
 #[test]
-fn shell_mode_keeps_stdout_reserved_for_final_json() {
+fn shell_mode_prints_final_action_json_to_stdout() {
     let server = mock_llm(vec![valid_options()]);
     let output = configured_ai_core(&server.url)
         .args(["--shell-mode", "--", "what", "is", "running"])
@@ -77,10 +76,14 @@ fn shell_mode_keeps_stdout_reserved_for_final_json() {
         .expect("run ai-core");
 
     assert!(output.status.success());
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "{\"action\":\"cancel\"}\n"
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
 
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("1. Show process using port 3000 [safe]"));
+    let request = server.request();
+    assert!(request.contains("what is running"));
 }
 
 #[test]
@@ -92,7 +95,10 @@ fn shell_mode_debug_writes_to_stderr_only() {
         .expect("run ai-core");
 
     assert!(output.status.success());
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "{\"action\":\"cancel\"}\n"
+    );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("debug: shell_mode=true"));
