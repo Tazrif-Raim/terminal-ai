@@ -26,6 +26,10 @@ struct Cli {
     #[arg(long)]
     debug: bool,
 
+    /// Print the resolved config with secrets redacted.
+    #[arg(long)]
+    print_config: bool,
+
     /// Natural language command request.
     #[arg(
         value_name = "PROMPT",
@@ -40,6 +44,10 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> ExitCode {
+    if cli.print_config {
+        return print_config();
+    }
+
     let prompt = prompt::join_parts(&cli.prompt);
 
     if prompt.is_empty() {
@@ -47,8 +55,17 @@ fn run(cli: Cli) -> ExitCode {
         return ExitCode::from(2);
     }
 
+    let resolved_config = match config::load() {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("{error}");
+            return ExitCode::from(2);
+        }
+    };
+
     if cli.debug {
         eprintln!("debug: shell_mode={}, prompt={:?}", cli.shell_mode, prompt);
+        eprintln!("debug: config={:?}", resolved_config.redacted());
     }
 
     if !cli.shell_mode {
@@ -56,6 +73,26 @@ fn run(cli: Cli) -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+fn print_config() -> ExitCode {
+    let (config, path) = match config::load_for_display() {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("{error}");
+            return ExitCode::from(2);
+        }
+    };
+
+    println!("{}", config::to_pretty_json(&config.redacted()));
+
+    match config.validate(&path) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::from(2)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -69,6 +106,7 @@ mod tests {
 
         assert!(!cli.shell_mode);
         assert!(!cli.debug);
+        assert!(!cli.print_config);
         assert_eq!(cli.prompt, ["what", "is", "running", "on", "port", "3000"]);
     }
 
@@ -85,6 +123,7 @@ mod tests {
 
         assert!(cli.shell_mode);
         assert!(cli.debug);
+        assert!(!cli.print_config);
         assert_eq!(cli.prompt, ["what", "is", "running"]);
     }
 
@@ -94,5 +133,13 @@ mod tests {
 
         assert!(cli.shell_mode);
         assert_eq!(cli.prompt, ["--version", "meaning"]);
+    }
+
+    #[test]
+    fn parses_print_config_flag_without_prompt() {
+        let cli = Cli::parse_from(["ai-core", "--print-config"]);
+
+        assert!(cli.print_config);
+        assert!(cli.prompt.is_empty());
     }
 }

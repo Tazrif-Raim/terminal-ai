@@ -117,12 +117,12 @@ Usage: ai <what do you want to do?>
 
 Goal: store LLM settings locally.
 
-- [ ] Support environment variables:
-  - [ ] `LLM_API_URL`
-  - [ ] `LLM_API_KEY`
-  - [ ] `LLM_MODEL`
+- [x] Support environment variables:
+  - [x] `LLM_API_URL`
+  - [x] `LLM_API_KEY`
+  - [x] `LLM_MODEL`
 
-- [ ] Support config file later:
+- [x] Support config file later:
 
 Windows:
 
@@ -136,7 +136,7 @@ Linux/macOS:
 ~/.config/terminal-ai/config.json
 ```
 
-- [ ] Config fields:
+- [x] Config fields:
 
 ```json
 {
@@ -148,9 +148,9 @@ Linux/macOS:
 }
 ```
 
-- [ ] Add clear error if API URL/key/model is missing.
-- [ ] Add command to print current resolved config without exposing full API key.
-- [ ] Mask API key in logs.
+- [x] Add clear error if API URL/key/model is missing.
+- [x] Add command to print current resolved config without exposing full API key.
+- [x] Mask API key in logs.
 
 ---
 

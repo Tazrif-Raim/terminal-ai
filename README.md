@@ -27,6 +27,21 @@ Phase 1 scaffold is in progress:
 
 ## Development
 
+Create a local `.env` from the root template if you want to keep provider
+settings near the project while developing:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+The Rust binary reads these values from the process environment:
+
+```txt
+LLM_API_URL
+LLM_API_KEY
+LLM_MODEL
+```
+
 ```powershell
 cd ai-core
 cargo check
