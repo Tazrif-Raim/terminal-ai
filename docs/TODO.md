@@ -216,7 +216,7 @@ Select command
   Kill process using port 3000
   Stop-Process -Id <PID> -Force
 
-↑/↓ or a/s = select | Enter = run | e = edit | q = cancel
+↑/↓ or w/s = select | Enter = run | e = copy/edit | q = cancel
 ```
 
 - [x] Use `crossterm` raw mode.
@@ -224,7 +224,7 @@ Select command
 - [x] Support selection keys:
   - [x] Up arrow = previous option.
   - [x] Down arrow = next option.
-  - [x] `a` = previous option.
+  - [x] `w` = previous option.
   - [x] `s` = next option.
   - [x] `Enter` = run.
   - [x] `e` = edit/insert only.
@@ -305,14 +305,14 @@ function ai {
 }
 ```
 
-- [ ] Add wrapper to `shell/powershell.ps1`.
-- [ ] Document how to add it to PowerShell profile.
+- [x] Add wrapper to `shell/powershell.ps1`.
+- [x] Document how to add it to PowerShell profile.
 - [ ] Verify `e` inserts into the next prompt.
-- [ ] Verify `Enter` runs in the current PowerShell context.
-- [ ] Verify commands like `cd` affect the current session.
-- [ ] Verify environment changes persist where PowerShell allows it.
+- [x] Verify `Enter` runs in the current PowerShell context.
+- [x] Verify commands like `cd` affect the current session.
+- [x] Verify environment changes persist where PowerShell allows it.
 - [ ] Verify command is added to PSReadLine history.
-- [ ] Print the command before running for transparency.
+- [x] Print the command before running for transparency.
 
 ---
 
@@ -489,6 +489,11 @@ PowerShell:
 - [ ] Bind `Ctrl+i` to open prompt UI.
 - [ ] Allow prompt from empty terminal line.
 - [ ] Allow selected command to be inserted into current PSReadLine buffer.
+- [ ] Revisit command-mode edit UX:
+  - [ ] Desired behavior: `ai <prompt>` -> pick option -> `e` places selected command into a fresh editable prompt line without running it.
+  - [ ] Current command-mode fallback: `e` copies the selected command to clipboard for manual paste/edit.
+  - [ ] Investigate whether this is possible outside a PSReadLine key handler without terminal repaint glitches.
+  - [ ] Prefer keybinding mode if it is the only reliable way to own the active PSReadLine buffer.
 - [ ] Add config toggle for keybinding install.
 - [ ] Avoid overriding existing keybinding without confirmation.
 

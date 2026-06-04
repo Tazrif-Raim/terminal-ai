@@ -19,11 +19,42 @@ rewriting the Rust core.
 
 ## Current State
 
-Phase 1 scaffold is in progress:
+Phase 6 PowerShell flow is in progress:
 
 - `ai-core/` contains the Rust binary crate.
-- `shell/` contains shell wrapper placeholders.
+- `shell/powershell.ps1` contains the current PowerShell wrapper.
+- Other shell wrappers are placeholders for later phases.
 - `docs/TODO.md` tracks the implementation phases.
+
+## PowerShell Setup
+
+Build the Rust binary:
+
+```powershell
+cargo build --manifest-path .\ai-core\Cargo.toml
+```
+
+Load the wrapper in the current PowerShell session:
+
+```powershell
+. .\shell\powershell.ps1
+```
+
+To load it automatically, add this line to your PowerShell profile:
+
+```powershell
+. E:\personal\terminal-ai\shell\powershell.ps1
+```
+
+Usage:
+
+```powershell
+ai what is running on port 3000
+```
+
+`Enter` in the picker runs the selected command in the current PowerShell
+session. `e` copies the selected command to your clipboard so you can paste,
+edit, and run it manually. `q` and `Esc` cancel.
 
 ## Development
 

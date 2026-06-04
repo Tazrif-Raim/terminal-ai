@@ -1,17 +1,20 @@
 use std::{
     fmt,
     io::{self, IsTerminal, Stderr, Write},
+    time::{Duration, Instant},
 };
 
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
     execute, queue,
     style::{Attribute, Print, SetAttribute},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
 use crate::types::{CommandOptions, PickerResult};
+
+const NAVIGATION_DEBOUNCE: Duration = Duration::from_millis(90);
 
 #[derive(Debug)]
 pub(crate) enum PickerError {
@@ -74,7 +77,7 @@ impl PickerState {
                 self.next();
                 None
             }
-            KeyCode::Char(value) if value.eq_ignore_ascii_case(&'a') => {
+            KeyCode::Char(value) if value.eq_ignore_ascii_case(&'w') => {
                 self.previous();
                 None
             }
@@ -125,11 +128,17 @@ pub(crate) fn pick(options: &CommandOptions) -> Result<PickerResult, PickerError
     let mut stderr = io::stderr();
     let _guard = TerminalGuard::enter(&mut stderr)?;
     let mut state = PickerState::new(options.options.len());
+    let mut last_navigation = None;
 
+    drain_pending_events()?;
     render(&mut stderr, options, state.selected())?;
 
     loop {
         if let Event::Key(key) = event::read()? {
+            if should_ignore_navigation(&key, &mut last_navigation) {
+                continue;
+            }
+
             if let Some(action) = state.handle_key(key) {
                 return Ok(state.result(options, action));
             }
@@ -167,9 +176,51 @@ fn render(
 
     queue!(
         stderr,
-        Print("Up/Down or a/s = select | Enter = run | e = edit | q = cancel")
+        Print("Up/Down or w/s = select | Enter = run | e = copy/edit | q = cancel")
     )?;
     stderr.flush()?;
+
+    Ok(())
+}
+
+fn should_ignore_navigation(key: &KeyEvent, last_navigation: &mut Option<Instant>) -> bool {
+    if !is_navigation_key(key) {
+        return false;
+    }
+
+    if key.kind == KeyEventKind::Repeat {
+        return true;
+    }
+
+    let now = Instant::now();
+    if let Some(last) = *last_navigation {
+        if now.duration_since(last) < NAVIGATION_DEBOUNCE {
+            return true;
+        }
+    }
+
+    *last_navigation = Some(now);
+    false
+}
+
+fn is_navigation_key(key: &KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Up | KeyCode::Down => true,
+        KeyCode::Char(value) => {
+            value.eq_ignore_ascii_case(&'w') || value.eq_ignore_ascii_case(&'s')
+        }
+        _ => false,
+    }
+}
+
+fn drain_pending_events() -> Result<(), PickerError> {
+    for _ in 0..64 {
+        if !event::poll(Duration::from_millis(0))? {
+            break;
+        }
+
+        let _ = event::read()?;
+    }
 
     Ok(())
 }
@@ -205,12 +256,12 @@ impl Drop for TerminalGuard {
 
 #[cfg(test)]
 mod tests {
-    use super::{PickerAction, PickerState};
+    use super::{PickerAction, PickerState, should_ignore_navigation};
     use crate::types::{CommandOption, CommandOptions, PickerResult, Risk};
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 
     #[test]
-    fn moves_selection_with_arrows_and_as_keys() {
+    fn moves_selection_with_arrows_and_ws_keys() {
         let mut state = PickerState::new(3);
 
         state.handle_key(key(KeyCode::Down));
@@ -225,8 +276,17 @@ mod tests {
         state.handle_key(key(KeyCode::Up));
         assert_eq!(state.selected(), 2);
 
-        state.handle_key(key(KeyCode::Char('a')));
+        state.handle_key(key(KeyCode::Char('w')));
         assert_eq!(state.selected(), 1);
+    }
+
+    #[test]
+    fn a_key_no_longer_moves_selection() {
+        let mut state = PickerState::new(3);
+
+        state.handle_key(key(KeyCode::Char('a')));
+
+        assert_eq!(state.selected(), 0);
     }
 
     #[test]
@@ -272,6 +332,25 @@ mod tests {
             state.result(&options(), PickerAction::Cancel),
             PickerResult::cancel()
         );
+    }
+
+    #[test]
+    fn ignores_repeated_navigation_events() {
+        let mut last_navigation = None;
+
+        assert!(!should_ignore_navigation(
+            &KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
+            &mut last_navigation
+        ));
+        assert!(should_ignore_navigation(
+            &KeyEvent {
+                code: KeyCode::Down,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Repeat,
+                state: KeyEventState::empty(),
+            },
+            &mut last_navigation
+        ));
     }
 
     fn key(code: KeyCode) -> KeyEvent {
