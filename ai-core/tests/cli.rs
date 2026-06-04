@@ -8,10 +8,11 @@ use std::{
 
 fn ai_core() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_ai-core"));
-    isolate_config(&mut command);
+    let root = isolate_config(&mut command);
     command.env_remove("LLM_API_URL");
     command.env_remove("LLM_API_KEY");
     command.env_remove("LLM_MODEL");
+    command.env("TERMINAL_AI_DOTENV_PATH", root.join(".env"));
     command
 }
 
@@ -23,7 +24,7 @@ fn configured_ai_core(api_url: &str) -> Command {
     command
 }
 
-fn isolate_config(command: &mut Command) {
+fn isolate_config(command: &mut Command) -> std::path::PathBuf {
     let root = std::env::temp_dir().join(format!(
         "terminal-ai-cli-test-{}-{}",
         std::process::id(),
@@ -33,6 +34,7 @@ fn isolate_config(command: &mut Command) {
     command.env("APPDATA", &root);
     command.env("XDG_CONFIG_HOME", &root);
     command.env("HOME", &root);
+    root
 }
 
 fn unique_id() -> u128 {
@@ -158,6 +160,7 @@ fn print_config_writes_redacted_json_to_stdout() {
     assert!(stdout.contains("\"api_url\": \"https://example.test/v1/chat/completions\""));
     assert!(stdout.contains("\"api_key\": \"test...-key\""));
     assert!(stdout.contains("\"model\": \"test-model\""));
+    assert!(stdout.contains("\"dangerous_requires_confirm\": true"));
     assert!(!stdout.contains("test-secret-key"));
 }
 

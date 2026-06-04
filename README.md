@@ -58,14 +58,17 @@ edit, and run it manually. `q` and `Esc` cancel.
 
 ## Development
 
-Create a local `.env` from the root template if you want to keep provider
-settings near the project while developing:
+Create a local `.env` from the root template to keep provider settings near the
+project while developing:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-The Rust binary reads these values from the process environment:
+The PowerShell wrapper points `ai-core` at this root `.env` automatically. Real
+process environment variables still take priority over `.env` values.
+
+The Rust binary reads these values:
 
 ```txt
 LLM_API_URL

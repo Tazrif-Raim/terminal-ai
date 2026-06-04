@@ -79,8 +79,9 @@ fn run(cli: Cli) -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    let options = safety::apply_overrides(options);
 
-    let result = match picker::pick(&options) {
+    let result = match picker::pick(&options, resolved_config.dangerous_requires_confirm) {
         Ok(result) => result,
         Err(error) => {
             eprintln!("{error}");

@@ -121,6 +121,7 @@ Goal: store LLM settings locally.
   - [x] `LLM_API_URL`
   - [x] `LLM_API_KEY`
   - [x] `LLM_MODEL`
+- [x] Auto-load project-root `.env` for local development without committing secrets.
 
 - [x] Support config file later:
 
@@ -320,34 +321,34 @@ function ai {
 
 Goal: reduce accidental destructive commands.
 
-- [ ] Implement basic command risk classification in Rust.
-- [ ] Use LLM-provided `risk`.
-- [ ] Add local regex-based risk override.
-- [ ] Dangerous pattern examples:
-  - [ ] `Remove-Item`
-  - [ ] `rm -rf`
-  - [ ] `del /s`
-  - [ ] `format`
-  - [ ] `diskpart`
-  - [ ] `git reset --hard`
-  - [ ] `git clean -fd`
-  - [ ] `Stop-Process`
-  - [ ] `taskkill`
-  - [ ] `docker system prune`
-  - [ ] `DROP DATABASE`
-  - [ ] `kubectl delete`
-  - [ ] `terraform destroy`
+- [x] Implement basic command risk classification in Rust.
+- [x] Use LLM-provided `risk`.
+- [x] Add local regex-based risk override.
+- [x] Dangerous pattern examples:
+  - [x] `Remove-Item`
+  - [x] `rm -rf`
+  - [x] `del /s`
+  - [x] `format`
+  - [x] `diskpart`
+  - [x] `git reset --hard`
+  - [x] `git clean -fd`
+  - [x] `Stop-Process`
+  - [x] `taskkill`
+  - [x] `docker system prune`
+  - [x] `DROP DATABASE`
+  - [x] `kubectl delete`
+  - [x] `terraform destroy`
 
-- [ ] Mark risky option visually:
+- [x] Mark risky option visually:
 
 ```txt
 [dangerous]
 ```
 
-- [ ] Require second confirmation for dangerous commands.
-- [ ] Prefer safe diagnostic command as option 1.
-- [ ] Never auto-run dangerous commands without explicit confirmation.
-- [ ] Add config option:
+- [x] Require second confirmation for dangerous commands.
+- [x] Prefer safe diagnostic command as option 1.
+- [x] Never auto-run dangerous commands without explicit confirmation.
+- [x] Add config option:
 
 ```json
 {

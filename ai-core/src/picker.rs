@@ -12,7 +12,7 @@ use crossterm::{
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 
-use crate::types::{CommandOptions, PickerResult};
+use crate::types::{CommandOptions, PickerResult, Risk};
 
 const NAVIGATION_DEBOUNCE: Duration = Duration::from_millis(90);
 
@@ -25,6 +25,12 @@ pub(crate) enum PickerError {
 enum PickerAction {
     Run,
     Edit,
+    Cancel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ConfirmDecision {
+    Run,
     Cancel,
 }
 
@@ -120,7 +126,10 @@ impl From<io::Error> for PickerError {
     }
 }
 
-pub(crate) fn pick(options: &CommandOptions) -> Result<PickerResult, PickerError> {
+pub(crate) fn pick(
+    options: &CommandOptions,
+    dangerous_requires_confirm: bool,
+) -> Result<PickerResult, PickerError> {
     if !io::stderr().is_terminal() {
         return Ok(PickerResult::cancel());
     }
@@ -140,12 +149,38 @@ pub(crate) fn pick(options: &CommandOptions) -> Result<PickerResult, PickerError
             }
 
             if let Some(action) = state.handle_key(key) {
+                if requires_dangerous_confirmation(
+                    options,
+                    state.selected(),
+                    action,
+                    dangerous_requires_confirm,
+                ) {
+                    render_dangerous_confirmation(&mut stderr, options, state.selected())?;
+                    drain_pending_events()?;
+
+                    return match read_dangerous_confirmation()? {
+                        ConfirmDecision::Run => Ok(state.result(options, action)),
+                        ConfirmDecision::Cancel => Ok(PickerResult::cancel()),
+                    };
+                }
+
                 return Ok(state.result(options, action));
             }
 
             render(&mut stderr, options, state.selected())?;
         }
     }
+}
+
+fn requires_dangerous_confirmation(
+    options: &CommandOptions,
+    selected: usize,
+    action: PickerAction,
+    dangerous_requires_confirm: bool,
+) -> bool {
+    dangerous_requires_confirm
+        && action == PickerAction::Run
+        && options.options[selected].risk == Risk::Dangerous
 }
 
 fn render(
@@ -181,6 +216,45 @@ fn render(
     stderr.flush()?;
 
     Ok(())
+}
+
+fn render_dangerous_confirmation(
+    stderr: &mut Stderr,
+    options: &CommandOptions,
+    selected: usize,
+) -> Result<(), PickerError> {
+    let option = &options.options[selected];
+
+    queue!(stderr, cursor::MoveTo(0, 0), Clear(ClearType::All))?;
+    queue!(stderr, Print("Dangerous command\r\n\r\n"))?;
+    queue!(stderr, Print(format!("{} [dangerous]\r\n", option.title)))?;
+    queue!(stderr, Print(format!("{}\r\n\r\n", option.command)))?;
+    queue!(
+        stderr,
+        Print("Press Enter again to run | q/Esc/Ctrl+C = cancel")
+    )?;
+    stderr.flush()?;
+
+    Ok(())
+}
+
+fn read_dangerous_confirmation() -> Result<ConfirmDecision, PickerError> {
+    loop {
+        if let Event::Key(key) = event::read()? {
+            if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                return Ok(ConfirmDecision::Cancel);
+            }
+
+            match key.code {
+                KeyCode::Enter => return Ok(ConfirmDecision::Run),
+                KeyCode::Char(value) if value.eq_ignore_ascii_case(&'q') => {
+                    return Ok(ConfirmDecision::Cancel);
+                }
+                KeyCode::Esc => return Ok(ConfirmDecision::Cancel),
+                _ => {}
+            }
+        }
+    }
 }
 
 fn should_ignore_navigation(key: &KeyEvent, last_navigation: &mut Option<Instant>) -> bool {
@@ -256,7 +330,9 @@ impl Drop for TerminalGuard {
 
 #[cfg(test)]
 mod tests {
-    use super::{PickerAction, PickerState, should_ignore_navigation};
+    use super::{
+        PickerAction, PickerState, requires_dangerous_confirmation, should_ignore_navigation,
+    };
     use crate::types::{CommandOption, CommandOptions, PickerResult, Risk};
     use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 
@@ -332,6 +408,45 @@ mod tests {
             state.result(&options(), PickerAction::Cancel),
             PickerResult::cancel()
         );
+    }
+
+    #[test]
+    fn requires_confirmation_only_for_dangerous_run_actions() {
+        let options = CommandOptions {
+            options: vec![
+                option("Inspect", "Get-Process"),
+                CommandOption {
+                    title: "Kill".to_owned(),
+                    command: "Stop-Process -Id 42".to_owned(),
+                    risk: Risk::Dangerous,
+                },
+            ],
+        };
+
+        assert!(!requires_dangerous_confirmation(
+            &options,
+            0,
+            PickerAction::Run,
+            true
+        ));
+        assert!(requires_dangerous_confirmation(
+            &options,
+            1,
+            PickerAction::Run,
+            true
+        ));
+        assert!(!requires_dangerous_confirmation(
+            &options,
+            1,
+            PickerAction::Run,
+            false
+        ));
+        assert!(!requires_dangerous_confirmation(
+            &options,
+            1,
+            PickerAction::Edit,
+            true
+        ));
     }
 
     #[test]

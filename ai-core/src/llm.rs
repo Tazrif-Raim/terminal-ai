@@ -320,6 +320,7 @@ mod tests {
             model: "test-model".to_owned(),
             default_shell: "powershell".to_owned(),
             max_options: 3,
+            dangerous_requires_confirm: true,
         }
     }
 }

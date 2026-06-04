@@ -21,9 +21,22 @@ function ai {
         return
     }
 
-    $json = & $aiCore --shell-mode -- $promptText
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) {
-        return
+    $restoreDotenvPath = $false
+    if (-not $env:TERMINAL_AI_DOTENV_PATH) {
+        $env:TERMINAL_AI_DOTENV_PATH = Join-Path $script:TerminalAiRoot '.env'
+        $restoreDotenvPath = $true
+    }
+
+    try {
+        $json = & $aiCore --shell-mode -- $promptText
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) {
+            return
+        }
+    }
+    finally {
+        if ($restoreDotenvPath) {
+            Remove-Item Env:\TERMINAL_AI_DOTENV_PATH -ErrorAction SilentlyContinue
+        }
     }
 
     $result = ConvertFrom-TerminalAiJson $json
