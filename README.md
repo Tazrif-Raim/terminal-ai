@@ -69,6 +69,27 @@ prompt/options pairs are appended to `prompt-responses.jsonl`. These are local
 only. There is no telemetry, and the resolved config defaults
 `telemetry_enabled` to `false`.
 
+## MVP Windows Install
+
+Install and update use the same command:
+
+```powershell
+irm https://terminal-ai.lab-node.me/powershell.ps1 | iex
+```
+
+Uninstall:
+
+```powershell
+irm https://terminal-ai.lab-node.me/uninstall.ps1 | iex
+```
+
+The installer writes app files to `%LOCALAPPDATA%\terminal-ai`, keeps BYOK
+config in `%APPDATA%\terminal-ai\config.json`, adds the local bin directory to
+the user PATH, and adds a marked terminal-ai block to the PowerShell profile.
+
+The static release bundle is built by `scripts\package-windows.ps1`. VPS setup
+and GitHub Actions deploy secrets are documented in `docs\VPS_SETUP.md`.
+
 ## Development
 
 Create a local `.env` from the root template to keep provider settings near the

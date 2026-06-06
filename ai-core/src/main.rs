@@ -38,6 +38,10 @@ struct Cli {
     #[arg(long)]
     print_config: bool,
 
+    /// View and edit LLM configuration.
+    #[arg(long)]
+    config: bool,
+
     /// Include explicit text file contents in the LLM context.
     #[arg(long, value_name = "FILE", num_args = 1.., value_terminator = "--")]
     files: Vec<PathBuf>,
@@ -56,6 +60,10 @@ fn run(cli: Cli) -> ExitCode {
         return print_config();
     }
 
+    if cli.config {
+        return configure();
+    }
+
     let input = normalize_cli_input(cli.prompt, cli.files);
 
     let prompt = prompt::join_parts(&input.prompt);
@@ -65,8 +73,9 @@ fn run(cli: Cli) -> ExitCode {
         return ExitCode::from(2);
     }
 
-    let resolved_config = match config::load() {
-        Ok(config) => config,
+    let resolved_config = match load_config_for_prompt(cli.shell_mode) {
+        Ok(Some(config)) => config,
+        Ok(None) => return print_result(PickerResult::cancel(), cli.shell_mode),
         Err(error) => {
             eprintln!("{error}");
             return ExitCode::from(2);
@@ -124,6 +133,26 @@ fn print_result(result: PickerResult, shell_mode: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+fn load_config_for_prompt(
+    shell_mode: bool,
+) -> Result<Option<config::ResolvedConfig>, config::ConfigError> {
+    match config::load() {
+        Ok(config) => Ok(Some(config)),
+        Err(error @ config::ConfigError::Missing { .. }) => {
+            if !config::can_configure_interactively() {
+                return Err(error);
+            }
+
+            match config::configure_interactive(config::ConfigEditMode::MissingOnly) {
+                Ok(config) => Ok(Some(config)),
+                Err(config::ConfigError::Cancelled) if shell_mode => Ok(None),
+                Err(error) => Err(error),
+            }
+        }
+        Err(error) => Err(error),
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct CliInput {
     prompt: Vec<String>,
@@ -177,6 +206,20 @@ fn print_config() -> ExitCode {
     }
 }
 
+fn configure() -> ExitCode {
+    match config::configure_interactive(config::ConfigEditMode::All) {
+        Ok(config) => {
+            println!("{}", config::to_pretty_json(&config.redacted()));
+            ExitCode::SUCCESS
+        }
+        Err(config::ConfigError::Cancelled) => ExitCode::from(130),
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::from(2)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Cli, normalize_cli_input};
@@ -190,6 +233,7 @@ mod tests {
         assert!(!cli.shell_mode);
         assert!(!cli.debug);
         assert!(!cli.print_config);
+        assert!(!cli.config);
         assert!(cli.files.is_empty());
         assert_eq!(cli.prompt, ["what", "is", "running", "on", "port", "3000"]);
     }
@@ -208,6 +252,7 @@ mod tests {
         assert!(cli.shell_mode);
         assert!(cli.debug);
         assert!(!cli.print_config);
+        assert!(!cli.config);
         assert!(cli.files.is_empty());
         assert_eq!(cli.prompt, ["what", "is", "running"]);
     }
@@ -273,6 +318,15 @@ mod tests {
         let cli = Cli::parse_from(["ai-core", "--print-config"]);
 
         assert!(cli.print_config);
+        assert!(!cli.config);
+        assert!(cli.prompt.is_empty());
+    }
+
+    #[test]
+    fn parses_config_flag_without_prompt() {
+        let cli = Cli::parse_from(["ai-core", "--config"]);
+
+        assert!(cli.config);
         assert!(cli.prompt.is_empty());
     }
 }

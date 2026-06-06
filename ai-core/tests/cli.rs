@@ -31,6 +31,10 @@ fn isolate_config(command: &mut Command) -> std::path::PathBuf {
         unique_id()
     ));
 
+    command.env(
+        "TERMINAL_AI_CONFIG_PATH",
+        root.join("terminal-ai").join("config.json"),
+    );
     command.env("APPDATA", &root);
     command.env("XDG_CONFIG_HOME", &root);
     command.env("HOME", &root);
@@ -168,6 +172,17 @@ fn print_config_writes_redacted_json_to_stdout() {
     assert!(stdout.contains("\"telemetry_enabled\": false"));
     assert!(stdout.contains("\"hide_descriptions\": false"));
     assert!(!stdout.contains("test-secret-key"));
+}
+
+#[test]
+fn config_flag_requires_terminal_for_interactive_edit() {
+    let output = ai_core().arg("--config").output().expect("run ai-core");
+
+    assert!(!output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("interactive config requires a terminal"));
 }
 
 struct MockLlm {

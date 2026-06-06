@@ -1,0 +1,100 @@
+name: Release terminal-ai
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy dist/site to the VPS after building
+        required: true
+        default: false
+        type: boolean
+  push:
+    tags:
+      - 'v*'
+
+env:
+  TERMINAL_AI_BASE_URL: https://terminal-ai.lab-node.me
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show Rust toolchain
+        shell: pwsh
+        run: rustup show
+
+      - name: Test
+        shell: pwsh
+        run: cargo test --manifest-path .\ai-core\Cargo.toml
+
+      - name: Package static site
+        shell: pwsh
+        run: .\scripts\package-windows.ps1 -BaseUrl $env:TERMINAL_AI_BASE_URL
+
+      - name: Upload static site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal-ai-site
+          path: dist/site
+          if-no-files-found: error
+
+  deploy-vps:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || inputs.deploy
+
+    steps:
+      - name: Download static site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terminal-ai-site
+          path: site
+
+      - name: Validate deploy secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_KNOWN_HOSTS"
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Upload to VPS web root
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_WEB_ROOT: ${{ secrets.VPS_WEB_ROOT }}
+        run: |
+          PORT="${VPS_PORT:-22}"
+          WEB_ROOT="${VPS_WEB_ROOT:-/var/www/terminal-ai}"
+          tar -czf terminal-ai-site.tgz -C site .
+          scp -P "$PORT" terminal-ai-site.tgz "$VPS_USER@$VPS_HOST:/tmp/terminal-ai-site.tgz"
+          ssh -p "$PORT" "$VPS_USER@$VPS_HOST" "mkdir -p '$WEB_ROOT' && tar -xzf /tmp/terminal-ai-site.tgz -C '$WEB_ROOT' && rm /tmp/terminal-ai-site.tgz"
+
+      - name: Smoke public files
+        shell: bash
+        run: |
+          curl -fsS "$TERMINAL_AI_BASE_URL/version.json" >/dev/null
+          curl -fsS "$TERMINAL_AI_BASE_URL/powershell.ps1" >/dev/null
+          curl -fsS "$TERMINAL_AI_BASE_URL/uninstall.ps1" >/dev/null

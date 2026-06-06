@@ -9,6 +9,23 @@ function ai {
         [string[]] $Prompt
     )
 
+    if ($Prompt.Count -eq 1) {
+        switch ($Prompt[0]) {
+            '--help' {
+                Show-TerminalAiHelp
+                return
+            }
+            '--version' {
+                Show-TerminalAiVersion
+                return
+            }
+            '--config' {
+                Invoke-TerminalAiConfig
+                return
+            }
+        }
+    }
+
     $parsedArgs = Split-TerminalAiPromptArgs $Prompt
     if (-not $parsedArgs) {
         return
@@ -26,9 +43,10 @@ function ai {
         return
     }
 
-    $terminalAiEnv = Get-TerminalAiContextEnv
-    if (-not $env:TERMINAL_AI_DOTENV_PATH) {
-        $terminalAiEnv['TERMINAL_AI_DOTENV_PATH'] = Join-Path $script:TerminalAiRoot '.env'
+    $terminalAiEnv = Get-TerminalAiBaseEnv
+    $contextEnv = Get-TerminalAiContextEnv
+    foreach ($key in $contextEnv.Keys) {
+        $terminalAiEnv[$key] = $contextEnv[$key]
     }
     $previousTerminalAiEnv = Set-TerminalAiProcessEnv $terminalAiEnv
 
@@ -90,10 +108,71 @@ function ai {
     }
 }
 
+function Show-TerminalAiHelp {
+    $help = @'
+terminal-ai
+
+Usage:
+  ai <what do you want to do?>
+
+Commands:
+  ai --help       Show this help.
+  ai --version    Show the installed version.
+  ai --config     View or edit LLM BYOK config.
+
+Only those exact invocations are commands. Any extra text is sent as a prompt.
+
+Example usages:
+  ai what is running on port 3000
+  ai see these files --files README.md docs\TODO.md
+  ai --config
+'@
+
+    Write-Host $help
+}
+
+function Show-TerminalAiVersion {
+    $aiCore = Get-TerminalAiCore
+    if (-not $aiCore) {
+        Write-Error 'ai-core was not found. Build ai-core and add it to PATH.'
+        return
+    }
+
+    $version = & $aiCore --version
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
+        return
+    }
+
+    $version -replace '^ai-core\s+', 'terminal-ai '
+}
+
+function Invoke-TerminalAiConfig {
+    $aiCore = Get-TerminalAiCore
+    if (-not $aiCore) {
+        Write-Error 'ai-core was not found. Build ai-core and add it to PATH.'
+        return
+    }
+
+    $terminalAiEnv = Get-TerminalAiBaseEnv
+    $previousTerminalAiEnv = Set-TerminalAiProcessEnv $terminalAiEnv
+
+    try {
+        & $aiCore --config
+    }
+    finally {
+        Restore-TerminalAiProcessEnv $previousTerminalAiEnv
+    }
+}
+
 function Get-TerminalAiCore {
     $command = Get-Command ai-core -ErrorAction SilentlyContinue
     if ($command) {
         return $command.Source
+    }
+
+    $installedBinary = Join-Path $script:TerminalAiRoot 'bin\ai-core.exe'
+    if (Test-Path -LiteralPath $installedBinary) {
+        return (Resolve-Path -LiteralPath $installedBinary).Path
     }
 
     $repoBinary = Join-Path $script:TerminalAiRoot 'ai-core\target\debug\ai-core.exe'
@@ -488,6 +567,16 @@ function Invoke-TerminalAiCommand {
     }
 
     Invoke-Expression $Command
+}
+
+function Get-TerminalAiBaseEnv {
+    $values = @{}
+
+    if (-not $env:TERMINAL_AI_DOTENV_PATH) {
+        $values['TERMINAL_AI_DOTENV_PATH'] = Join-Path $script:TerminalAiRoot '.env'
+    }
+
+    return $values
 }
 
 function Get-TerminalAiContextEnv {
