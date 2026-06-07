@@ -68,7 +68,11 @@ pub(crate) fn collect(config: &ResolvedConfig, files: &[PathBuf]) -> ShellContex
         shell_name: env_value(ENV_SHELL_NAME).unwrap_or_else(|| config.default_shell.clone()),
         shell_version: env_value(ENV_SHELL_VERSION),
         current_dir: include_context
-            .then(|| current_dir.as_ref().map(display_path))
+            .then(|| {
+                current_dir
+                    .as_ref()
+                    .map(|path| display_path(path.as_path()))
+            })
             .flatten(),
         git_branch: include_context
             .then(|| current_dir.as_ref().and_then(|dir| git_branch(dir)))
@@ -122,7 +126,7 @@ fn env_value(key: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn display_path(path: &PathBuf) -> String {
+fn display_path(path: &Path) -> String {
     path.display().to_string()
 }
 

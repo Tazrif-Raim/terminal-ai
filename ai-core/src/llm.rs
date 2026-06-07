@@ -109,6 +109,34 @@ pub(crate) fn generate_options(
     })
 }
 
+pub(crate) fn complete_chat(
+    config: &ResolvedConfig,
+    system_prompt: &str,
+    user_prompt: &str,
+) -> Result<String, LlmError> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(config.request_timeout_seconds))
+        .build()
+        .map_err(LlmError::ClientBuild)?;
+
+    let request = ChatRequest {
+        model: config.model.clone(),
+        temperature: TEMPERATURE,
+        messages: vec![
+            ChatMessage {
+                role: "system",
+                content: system_prompt.to_owned(),
+            },
+            ChatMessage {
+                role: "user",
+                content: user_prompt.to_owned(),
+            },
+        ],
+    };
+
+    send_chat_request(&client, config, &request)
+}
+
 fn generate_options_with_sender(
     config: &ResolvedConfig,
     request: &str,
@@ -247,17 +275,16 @@ fn trim_error_body(body: &str) -> String {
 }
 
 fn clean_api_error_message(body: &str) -> String {
-    if let Ok(value) = serde_json::from_str::<Value>(body) {
-        if let Some(message) = value
+    if let Ok(value) = serde_json::from_str::<Value>(body)
+        && let Some(message) = value
             .get("error")
             .and_then(|error| error.get("message"))
             .and_then(Value::as_str)
             .or_else(|| value.get("message").and_then(Value::as_str))
             .map(str::trim)
             .filter(|message| !message.is_empty())
-        {
-            return trim_error_body(message);
-        }
+    {
+        return trim_error_body(message);
     }
 
     trim_error_body(body)

@@ -1,16 +1,52 @@
-if (-not $script:TerminalAiRoot) {
-    $script:TerminalAiRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-}
+$script:TerminalAiRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 
 function ai {
     [CmdletBinding()]
     param(
+        [switch] $Agent,
+        [switch] $DryRun,
+        [switch] $AgentLogs,
+
         [Parameter(ValueFromRemainingArguments = $true)]
         [string[]] $Prompt
     )
 
-    if ($Prompt.Count -eq 1) {
-        switch ($Prompt[0]) {
+    $agentMode = $Agent.IsPresent
+    $dryRunMode = $DryRun.IsPresent
+    $agentLogsMode = $AgentLogs.IsPresent
+    $promptArgs = @($Prompt)
+    if ($promptArgs.Count -gt 0 -and $promptArgs[0] -eq '--agent-logs') {
+        $agentLogsMode = $true
+        if ($promptArgs.Count -eq 1) {
+            $promptArgs = @()
+        }
+        else {
+            $promptArgs = @($promptArgs[1..($promptArgs.Count - 1)])
+        }
+    }
+
+    if ($promptArgs.Count -gt 0 -and $promptArgs[0] -eq '--agent') {
+        $agentMode = $true
+        if ($promptArgs.Count -eq 1) {
+            $promptArgs = @()
+        }
+        else {
+            $promptArgs = @($promptArgs[1..($promptArgs.Count - 1)])
+        }
+    }
+
+    if ($agentMode -and $promptArgs.Count -gt 0 -and $promptArgs[0] -eq '--dry-run') {
+        $dryRunMode = $true
+        if ($promptArgs.Count -eq 1) {
+            $promptArgs = @()
+        }
+        else {
+            $promptArgs = @($promptArgs[1..($promptArgs.Count - 1)])
+        }
+    }
+
+    if (-not $agentMode -and -not $agentLogsMode -and $promptArgs.Count -eq 1) {
+        switch ($promptArgs[0]) {
             '--help' {
                 Show-TerminalAiHelp
                 return
@@ -26,7 +62,20 @@ function ai {
         }
     }
 
-    $parsedArgs = Split-TerminalAiPromptArgs $Prompt
+    if ($agentLogsMode) {
+        $aiCore = Get-TerminalAiCore
+        if (-not $aiCore) {
+            Write-Error 'ai-core was not found. Build ai-core and add it to PATH.'
+            return
+        }
+
+        $aiCoreArgs = @('--agent-logs')
+        $aiCoreArgs += $promptArgs
+        & $aiCore @aiCoreArgs
+        return
+    }
+
+    $parsedArgs = Split-TerminalAiPromptArgs $promptArgs
     if (-not $parsedArgs) {
         return
     }
@@ -51,13 +100,27 @@ function ai {
     $previousTerminalAiEnv = Set-TerminalAiProcessEnv $terminalAiEnv
 
     try {
-        $aiCoreArgs = @('--shell-mode')
+        if ($agentMode) {
+            $aiCoreArgs = @('--agent')
+            if ($dryRunMode) {
+                $aiCoreArgs += '--dry-run'
+            }
+        }
+        else {
+            $aiCoreArgs = @('--shell-mode')
+        }
+
         if ($parsedArgs.Files.Count -gt 0) {
             $aiCoreArgs += '--files'
             $aiCoreArgs += $parsedArgs.Files
         }
         $aiCoreArgs += '--'
         $aiCoreArgs += $promptText
+
+        if ($agentMode) {
+            & $aiCore @aiCoreArgs
+            return
+        }
 
         $json = & $aiCore @aiCoreArgs
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) {
@@ -114,16 +177,24 @@ terminal-ai
 
 Usage:
   ai <what do you want to do?>
+  ai --agent <what do you want to do?>
+  ai --agent --dry-run <what do you want to do?>
+  ai --agent-logs [open]
 
 Commands:
   ai --help       Show this help.
   ai --version    Show the installed version.
   ai --config     View or edit LLM BYOK config.
+  ai --agent ...  Run the agent workflow.
+  ai --agent-logs List recent agent audit logs.
 
 Only those exact invocations are commands. Any extra text is sent as a prompt.
 
 Example usages:
   ai what is running on port 3000
+  ai --agent list all files in this directory
+  ai --agent --dry-run inspect this repo and propose setup steps
+  ai --agent-logs
   ai see these files --files README.md docs\TODO.md
   ai --config
 '@
@@ -165,9 +236,10 @@ function Invoke-TerminalAiConfig {
 }
 
 function Get-TerminalAiCore {
-    $command = Get-Command ai-core -ErrorAction SilentlyContinue
-    if ($command) {
-        return $command.Source
+    $repoManifest = Join-Path $script:TerminalAiRoot 'ai-core\Cargo.toml'
+    $repoBinary = Join-Path $script:TerminalAiRoot 'ai-core\target\debug\ai-core.exe'
+    if ((Test-Path -LiteralPath $repoManifest) -and (Test-Path -LiteralPath $repoBinary)) {
+        return (Resolve-Path -LiteralPath $repoBinary).Path
     }
 
     $installedBinary = Join-Path $script:TerminalAiRoot 'bin\ai-core.exe'
@@ -175,9 +247,9 @@ function Get-TerminalAiCore {
         return (Resolve-Path -LiteralPath $installedBinary).Path
     }
 
-    $repoBinary = Join-Path $script:TerminalAiRoot 'ai-core\target\debug\ai-core.exe'
-    if (Test-Path -LiteralPath $repoBinary) {
-        return (Resolve-Path -LiteralPath $repoBinary).Path
+    $command = Get-Command ai-core -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
     }
 
     return $null

@@ -102,10 +102,11 @@ fn clear_loading(stderr: &mut Stderr) -> io::Result<()> {
 
 fn is_cancel_pressed() -> bool {
     while event::poll(Duration::from_millis(0)).unwrap_or(false) {
-        if let Ok(Event::Key(key)) = event::read() {
-            if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                return true;
-            }
+        if let Ok(Event::Key(key)) = event::read()
+            && key.code == KeyCode::Char('c')
+            && key.modifiers.contains(KeyModifiers::CONTROL)
+        {
+            return true;
         }
     }
 
