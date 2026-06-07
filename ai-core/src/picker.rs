@@ -335,10 +335,10 @@ fn should_ignore_navigation(key: &KeyEvent, last_navigation: &mut Option<Instant
     }
 
     let now = Instant::now();
-    if let Some(last) = *last_navigation {
-        if now.duration_since(last) < NAVIGATION_DEBOUNCE {
-            return true;
-        }
+    if let Some(last) = *last_navigation
+        && now.duration_since(last) < NAVIGATION_DEBOUNCE
+    {
+        return true;
     }
 
     *last_navigation = Some(now);

@@ -1,3 +1,4 @@
+mod agent;
 mod config;
 mod context;
 mod history;
@@ -30,6 +31,18 @@ struct Cli {
     #[arg(long)]
     shell_mode: bool,
 
+    /// Run the experimental agent workflow.
+    #[arg(long)]
+    agent: bool,
+
+    /// Preview agent steps without executing them.
+    #[arg(long)]
+    dry_run: bool,
+
+    /// List recent agent audit logs. Pass "open" to open the latest log.
+    #[arg(long)]
+    agent_logs: bool,
+
     /// Print debug diagnostics to stderr.
     #[arg(long)]
     debug: bool,
@@ -56,6 +69,15 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: Cli) -> ExitCode {
+    if cli.agent_logs {
+        return agent::show_logs(cli.prompt.first().is_some_and(|arg| arg == "open"));
+    }
+
+    if cli.dry_run && !cli.agent {
+        eprintln!("error: --dry-run requires --agent");
+        return ExitCode::from(2);
+    }
+
     if cli.print_config {
         return print_config();
     }
@@ -85,6 +107,16 @@ fn run(cli: Cli) -> ExitCode {
     if cli.debug {
         eprintln!("debug: shell_mode={}, prompt={:?}", cli.shell_mode, prompt);
         eprintln!("debug: config={:?}", resolved_config.redacted());
+    }
+
+    if cli.agent {
+        return agent::run(
+            &prompt,
+            &resolved_config,
+            agent::types::AgentRunOptions {
+                dry_run: cli.dry_run,
+            },
+        );
     }
 
     if !cli.shell_mode {
@@ -231,6 +263,9 @@ mod tests {
         let cli = Cli::parse_from(["ai-core", "what", "is", "running", "on", "port", "3000"]);
 
         assert!(!cli.shell_mode);
+        assert!(!cli.agent);
+        assert!(!cli.dry_run);
+        assert!(!cli.agent_logs);
         assert!(!cli.debug);
         assert!(!cli.print_config);
         assert!(!cli.config);
@@ -250,6 +285,9 @@ mod tests {
         ]);
 
         assert!(cli.shell_mode);
+        assert!(!cli.agent);
+        assert!(!cli.dry_run);
+        assert!(!cli.agent_logs);
         assert!(cli.debug);
         assert!(!cli.print_config);
         assert!(!cli.config);
@@ -262,7 +300,37 @@ mod tests {
         let cli = Cli::parse_from(["ai-core", "--shell-mode", "--", "--version", "meaning"]);
 
         assert!(cli.shell_mode);
+        assert!(!cli.agent);
+        assert!(!cli.dry_run);
+        assert!(!cli.agent_logs);
         assert_eq!(cli.prompt, ["--version", "meaning"]);
+    }
+
+    #[test]
+    fn parses_agent_flag() {
+        let cli = Cli::parse_from(["ai-core", "--agent", "hello"]);
+
+        assert!(cli.agent);
+        assert!(!cli.dry_run);
+        assert!(!cli.shell_mode);
+        assert_eq!(cli.prompt, ["hello"]);
+    }
+
+    #[test]
+    fn parses_agent_dry_run_flag() {
+        let cli = Cli::parse_from(["ai-core", "--agent", "--dry-run", "hello"]);
+
+        assert!(cli.agent);
+        assert!(cli.dry_run);
+        assert_eq!(cli.prompt, ["hello"]);
+    }
+
+    #[test]
+    fn parses_agent_logs_flag() {
+        let cli = Cli::parse_from(["ai-core", "--agent-logs", "open"]);
+
+        assert!(cli.agent_logs);
+        assert_eq!(cli.prompt, ["open"]);
     }
 
     #[test]
