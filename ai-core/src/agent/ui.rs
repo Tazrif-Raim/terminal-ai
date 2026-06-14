@@ -9,7 +9,7 @@ use crossterm::{
 
 use crate::types::Risk;
 
-use super::types::{ActionType, AgentState, AgentStep, StepOutput};
+use super::types::{ActionType, AgentState, AgentStep, BackgroundProcess, StepOutput};
 
 const SEPARATOR: &str = "------------------------------------------";
 
@@ -226,6 +226,83 @@ fn duration_label(duration_ms: u64) -> String {
         format!("{duration_ms}ms")
     } else {
         format!("{:.1}s", duration_ms as f64 / 1_000.0)
+    }
+}
+
+pub(crate) fn ask_keep_background_processes(processes: &[BackgroundProcess]) -> bool {
+    let mut stderr = io::stderr();
+
+    let _ = queue!(
+        stderr,
+        Print(format!("\n{SEPARATOR}\n")),
+        SetForegroundColor(Color::Yellow),
+        Print(" Agent complete. Background processes still running:\n"),
+        ResetColor,
+        Print(format!("{SEPARATOR}\n"))
+    );
+
+    for proc in processes {
+        let elapsed = proc.started_at.elapsed();
+        let elapsed_str = duration_label(elapsed.as_millis() as u64);
+        let pid_str = proc
+            .pid
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| "?".to_string());
+        let _ = queue!(
+            stderr,
+            Print(format!(
+                "   • {:<20} (PID {}, running {})\n     cmd: {}\n",
+                proc.label, pid_str, elapsed_str, proc.command
+            ))
+        );
+    }
+
+    let _ = queue!(
+        stderr,
+        Print(format!("{SEPARATOR}\n")),
+        Print(" Keep them running after agent exits? (y/n) ")
+    );
+    let _ = stderr.flush();
+
+    if io::stdin().is_terminal() && io::stderr().is_terminal() {
+        return read_keep_confirmation().unwrap_or(true);
+    }
+
+    // Non-interactive: default to keeping them running
+    eprintln!("y");
+    true
+}
+
+fn read_keep_confirmation() -> io::Result<bool> {
+    let _guard = RawModeGuard::enter()?;
+
+    loop {
+        if let Event::Key(key) = event::read()? {
+            if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                eprintln!();
+                return Ok(false);
+            }
+
+            match key.code {
+                KeyCode::Char(value) if value.eq_ignore_ascii_case(&'y') => {
+                    eprintln!();
+                    return Ok(true);
+                }
+                KeyCode::Char(value) if value.eq_ignore_ascii_case(&'n') => {
+                    eprintln!();
+                    return Ok(false);
+                }
+                KeyCode::Char(value) if value.eq_ignore_ascii_case(&'q') => {
+                    eprintln!();
+                    return Ok(false);
+                }
+                KeyCode::Esc => {
+                    eprintln!();
+                    return Ok(false);
+                }
+                _ => {}
+            }
+        }
     }
 }
 

@@ -395,7 +395,7 @@ fn valid_options() -> &'static str {
 
 fn agent_pwd_step(step: usize, total: usize) -> String {
     format!(
-        r#"{{"step":{step},"total_estimated":{total},"action_type":"RunCommand","command":"pwd","risk":"Safe","reasoning":"Inspect the current directory."}}"#
+        r#"{{"step":{step},"total_estimated":{total},"action_type":"RunCommand","command":"pwd","risk":"Safe","background":false,"reasoning":"Inspect the current directory."}}"#
     )
 }
 
@@ -406,11 +406,11 @@ fn agent_done_step(step: usize, total: usize) -> String {
 }
 
 fn agent_create_file_step() -> String {
-    r#"{"step":1,"total_estimated":2,"action_type":"RunCommand","command":"echo hello > dry-run-created.txt","risk":"Safe","reasoning":"Create the requested file."}"#.to_owned()
+    r#"{"step":1,"total_estimated":2,"action_type":"RunCommand","command":"echo hello > dry-run-created.txt","risk":"Safe","background":false,"reasoning":"Create the requested file."}"#.to_owned()
 }
 
 fn agent_dangerous_echo_step() -> String {
-    r#"{"step":1,"total_estimated":1,"action_type":"RunCommand","command":"echo dangerous > dangerous-created.txt","risk":"Dangerous","reasoning":"Exercise dangerous confirmation."}"#.to_owned()
+    r#"{"step":1,"total_estimated":1,"action_type":"RunCommand","command":"echo dangerous > dangerous-created.txt","risk":"Dangerous","background":false,"reasoning":"Exercise dangerous confirmation."}"#.to_owned()
 }
 
 fn test_temp_dir(name: &str) -> std::path::PathBuf {

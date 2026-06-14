@@ -8,7 +8,7 @@ use std::{
 use directories::BaseDirs;
 use serde::Serialize;
 
-use super::types::{AgentState, CompletedStep};
+use super::types::{AgentState, CompletedStep, BackgroundProcessRecord};
 
 const LOG_LIMIT: usize = 10;
 const ENV_AGENT_LOG_DIR: &str = "TERMINAL_AI_AGENT_LOG_DIR";
@@ -20,10 +20,11 @@ struct AuditLog<'a> {
     exit_code: i32,
     total_duration_ms: u64,
     steps: &'a [CompletedStep],
+    background_processes: Vec<BackgroundProcessRecord>,
 }
 
 pub(crate) fn write(
-    state: &AgentState,
+    state: &mut AgentState,
     exit_code: i32,
     total_duration_ms: u64,
 ) -> io::Result<PathBuf> {
@@ -31,12 +32,26 @@ pub(crate) fn write(
     fs::create_dir_all(&dir)?;
 
     let path = dir.join(format!("{}.json", timestamp_ms()));
+    
+    // Convert live BackgroundProcess to serializable BackgroundProcessRecord
+    let background_records: Vec<BackgroundProcessRecord> = state.background_processes.iter_mut().map(|proc| {
+        let kept_running = proc.child.try_wait().map(|opt| opt.is_none()).unwrap_or(false);
+        BackgroundProcessRecord {
+            label: proc.label.clone(),
+            command: proc.command.clone(),
+            pid: proc.pid,
+            started_at_ms: proc.started_at_ms(),
+            kept_running,
+        }
+    }).collect();
+    
     let log = AuditLog {
         goal: &state.goal,
         cwd: state.cwd.display().to_string(),
         exit_code,
         total_duration_ms,
         steps: &state.history,
+        background_processes: background_records,
     };
     let content = serde_json::to_string_pretty(&log).expect("audit log serializes");
     fs::write(&path, format!("{content}\n"))?;
