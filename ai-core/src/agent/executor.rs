@@ -159,7 +159,7 @@ pub(crate) fn spawn_background(command: &str, state: &mut AgentState) -> StepOut
     match cmd.current_dir(&state.cwd).envs(&state.env).spawn() {
         Ok(child) => {
             let pid = child.id();
-            let label = "TODO: Add meaningful label".to_string();
+            let label = command.to_string();
             state.background_processes.push(BackgroundProcess {
                 label,
                 command: command.to_string(),

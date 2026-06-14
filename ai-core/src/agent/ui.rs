@@ -231,7 +231,7 @@ fn duration_label(duration_ms: u64) -> String {
 
 pub(crate) fn ask_keep_background_processes(processes: &[BackgroundProcess]) -> bool {
     let mut stderr = io::stderr();
-    
+
     let _ = queue!(
         stderr,
         Print(format!("\n{SEPARATOR}\n")),
@@ -240,17 +240,23 @@ pub(crate) fn ask_keep_background_processes(processes: &[BackgroundProcess]) -> 
         ResetColor,
         Print(format!("{SEPARATOR}\n"))
     );
-    
+
     for proc in processes {
         let elapsed = proc.started_at.elapsed();
         let elapsed_str = duration_label(elapsed.as_millis() as u64);
-        let pid_str = proc.pid.map(|p| p.to_string()).unwrap_or_else(|| "?".to_string());
+        let pid_str = proc
+            .pid
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| "?".to_string());
         let _ = queue!(
             stderr,
-            Print(format!("   • {:<20} (PID {}, running {})\n", proc.command, pid_str, elapsed_str))
+            Print(format!(
+                "   • {:<20} (PID {}, running {})\n     cmd: {}\n",
+                proc.label, pid_str, elapsed_str, proc.command
+            ))
         );
     }
-    
+
     let _ = queue!(
         stderr,
         Print(format!("{SEPARATOR}\n")),

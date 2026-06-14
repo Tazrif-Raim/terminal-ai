@@ -325,7 +325,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cwd_override_allowed_with_windows_paths() {
+    fn cwd_override_allowed_accepts_project_root_and_subdirs() {
         // Create a mock state with a project root
         let root = temp_path("root");
         fs::create_dir_all(&root).expect("create root");
@@ -364,7 +364,7 @@ fn kill_pids(pids: &[u32]) {
     {
         for pid in pids {
             let _ = Command::new("taskkill")
-                .args(["/PID", &pid.to_string(), "/F"])
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
                 .output();
         }
     }

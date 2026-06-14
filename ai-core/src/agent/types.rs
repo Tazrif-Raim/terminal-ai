@@ -131,10 +131,11 @@ impl std::fmt::Debug for BackgroundProcess {
 
 impl BackgroundProcess {
     pub(crate) fn started_at_ms(&self) -> u64 {
-        SystemTime::now()
+        let now_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis() as u64
-            - self.started_at.elapsed().as_millis() as u64
+            .as_millis() as u64;
+        let elapsed_ms = self.started_at.elapsed().as_millis() as u64;
+        now_ms.saturating_sub(elapsed_ms)
     }
 }
