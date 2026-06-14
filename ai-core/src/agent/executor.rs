@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use super::types::{AgentState, StepOutput};
+use super::types::{AgentState, StepOutput, BackgroundProcess};
 
 pub(crate) fn run_command(command: &str, state: &mut AgentState) -> StepOutput {
     let started = Instant::now();
@@ -87,7 +87,12 @@ fn parse_cd_target(command: &str) -> Option<String> {
         return None;
     }
 
-    let target = parts.next()?.trim();
+    // Extract the target path, stopping at any command chaining operators like "&&"
+    let raw_target = parts.next()?.trim();
+    if raw_target.is_empty() {
+        return None;
+    }
+    let target = raw_target.split("&&").next()?.trim();
     if target.is_empty() {
         return None;
     }
@@ -136,6 +141,47 @@ fn step_output(
         exit_code,
         success,
         duration_ms: started.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
+    }
+}
+
+pub(crate) fn spawn_background(command: &str, state: &mut AgentState) -> StepOutput {
+    let started = Instant::now();
+    let mut cmd = shell_command(command);
+
+    // Set Windows process group flag
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
+        cmd.creation_flags(CREATE_NEW_PROCESS_GROUP);
+    }
+
+    match cmd.current_dir(&state.cwd).envs(&state.env).spawn() {
+        Ok(child) => {
+            let pid = child.id();
+            let label = "TODO: Add meaningful label".to_string();
+            state.background_processes.push(BackgroundProcess {
+                label,
+                command: command.to_string(),
+                pid: Some(pid),
+                child,
+                started_at: started,
+            });
+            StepOutput {
+                stdout: format!("started in background (PID {})\n", pid),
+                stderr: String::new(),
+                exit_code: 0,
+                success: true,
+                duration_ms: started.elapsed().as_millis() as u64,
+            }
+        }
+        Err(e) => StepOutput {
+            stdout: String::new(),
+            stderr: e.to_string(),
+            exit_code: -1,
+            success: false,
+            duration_ms: started.elapsed().as_millis() as u64,
+        },
     }
 }
 

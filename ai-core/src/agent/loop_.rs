@@ -1,8 +1,9 @@
 use std::{
     env, fs,
     path::{Path, PathBuf},
-    process::ExitCode,
+    process::{Command, ExitCode},
     time::Instant,
+    sync::{Arc, Mutex},
 };
 
 use crate::{config::ResolvedConfig, types::Risk};
@@ -33,6 +34,15 @@ pub(crate) fn run(goal: &str, config: &ResolvedConfig, options: AgentRunOptions)
         }
     };
 
+    // Track background process PIDs for Ctrl+C handler
+    let background_pids: Arc<Mutex<Vec<u32>>> = Arc::new(Mutex::new(Vec::new()));
+    let pids_for_handler = Arc::clone(&background_pids);
+
+    ctrlc::set_handler(move || {
+        kill_pids(&pids_for_handler.lock().unwrap());
+        std::process::exit(130);
+    }).expect("Failed to set Ctrl+C handler");
+
     if options.dry_run {
         eprintln!("agent mode starting (dry run)");
     } else {
@@ -44,7 +54,7 @@ pub(crate) fn run(goal: &str, config: &ResolvedConfig, options: AgentRunOptions)
             Ok(step) => step,
             Err(error) => {
                 ui::render_error(&error.to_string());
-                return finish(&state, 1, started);
+                return finish(&mut state, 1, started);
             }
         };
 
@@ -53,7 +63,7 @@ pub(crate) fn run(goal: &str, config: &ResolvedConfig, options: AgentRunOptions)
 
         if step.action_type == ActionType::Done {
             ui::render_done(&state);
-            return finish(&state, 0, started);
+            return finish(&mut state, 0, started);
         }
 
         let output = if let Some(message) = blocked_step_message(&step) {
@@ -64,9 +74,9 @@ pub(crate) fn run(goal: &str, config: &ResolvedConfig, options: AgentRunOptions)
             && config.dangerous_requires_confirm
             && !ui::confirm_dangerous(&step)
         {
-            return finish(&state, 130, started);
+            return finish(&mut state, 130, started);
         } else {
-            execute_step(&step, &mut state)
+            execute_step(&step, &mut state, &background_pids)
         };
 
         if step.action_type == ActionType::AskUser {
@@ -86,14 +96,14 @@ pub(crate) fn run(goal: &str, config: &ResolvedConfig, options: AgentRunOptions)
 
         if state.history.len() >= MAX_AGENT_STEPS {
             ui::render_error("agent reached the maximum step limit");
-            return finish(&state, 1, started);
+            return finish(&mut state, 1, started);
         }
 
         if state.consecutive_failures >= 3
             && !ui::ask_user("The last 3 steps failed. Continue anyway? (y/n)")
                 .eq_ignore_ascii_case("y")
         {
-            return finish(&state, 1, started);
+            return finish(&mut state, 1, started);
         }
     }
 }
@@ -104,7 +114,7 @@ fn initial_state(goal: &str) -> std::io::Result<AgentState> {
     Ok(AgentState::new(goal, current_dir, env::vars().collect()))
 }
 
-fn execute_step(step: &AgentStep, state: &mut AgentState) -> StepOutput {
+fn execute_step(step: &AgentStep, state: &mut AgentState, background_pids: &Arc<Mutex<Vec<u32>>>) -> StepOutput {
     let previous_cwd = match apply_cwd_override(step, state) {
         Ok(previous_cwd) => previous_cwd,
         Err(output) => return output,
@@ -113,7 +123,18 @@ fn execute_step(step: &AgentStep, state: &mut AgentState) -> StepOutput {
     let output = match step.action_type {
         ActionType::RunCommand => {
             let command = step.command.as_deref().unwrap_or_default();
-            executor::run_command(command, state)
+            if step.background {
+                let output = executor::spawn_background(command, state);
+                // Track PID for Ctrl+C handler
+                if output.success {
+                    if let Some(pid) = state.background_processes.last().and_then(|p| p.pid) {
+                        background_pids.lock().unwrap().push(pid);
+                    }
+                }
+                output
+            } else {
+                executor::run_command(command, state)
+            }
         }
         ActionType::ReadFile => {
             let path = step.file_path.as_deref().unwrap_or_default();
@@ -170,7 +191,14 @@ fn apply_cwd_override(
 }
 
 fn cwd_override_allowed(path: &Path, state: &AgentState) -> bool {
-    state.project_root.parent().is_none() || path.starts_with(&state.project_root)
+    state.project_root.parent().is_none() || path.starts_with(&state.project_root) || {
+        // Handle Windows \\?\ prefix by comparing canonical versions
+        if let (Ok(canon_path), Ok(canon_root)) = (fs::canonicalize(path), fs::canonicalize(&state.project_root)) {
+            canon_path.starts_with(&canon_root)
+        } else {
+            false
+        }
+    }
 }
 
 fn resolve_path(path: &str, state: &AgentState) -> PathBuf {
@@ -228,13 +256,38 @@ fn dry_run_output(step: &AgentStep) -> StepOutput {
     }
 }
 
-fn finish(state: &AgentState, exit_code: u8, started: Instant) -> ExitCode {
+fn finish(state: &mut AgentState, exit_code: u8, started: Instant) -> ExitCode {
+    // Handle background processes on clean exit (only for Done, not for errors/Ctrl+C)
+    if exit_code == 0 {
+        handle_background_processes_on_exit(state);
+    }
+    
     let total_duration_ms = started.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
     if let Err(error) = logs::write(state, i32::from(exit_code), total_duration_ms) {
         ui::render_error(&format!("could not write agent audit log: {error}"));
     }
 
     ExitCode::from(exit_code)
+}
+
+fn handle_background_processes_on_exit(state: &mut AgentState) {
+    if state.background_processes.is_empty() {
+        return;
+    }
+
+    let keep = ui::ask_keep_background_processes(&state.background_processes);
+
+    if keep {
+        // Detach: on Windows, CREATE_NEW_PROCESS_GROUP was set at spawn time,
+        // so just don't kill. On Unix, don't call kill/wait.
+        // Nothing to do - just let them live.
+    } else {
+        // Kill each process
+        for proc in &mut state.background_processes {
+            let _ = proc.child.kill();
+            let _ = proc.child.wait(); // reap to avoid zombies on unix
+        }
+    }
 }
 
 #[cfg(test)]
@@ -280,5 +333,25 @@ mod tests {
             "terminal-ai-loop-test-{}-{name}",
             std::process::id()
         ))
+    }
+}
+
+fn kill_pids(pids: &[u32]) {
+    #[cfg(windows)]
+    {
+        for pid in pids {
+            let _ = Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/F"])
+                .output();
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        for pid in pids {
+            let _ = Command::new("kill")
+                .args(["-9", &pid.to_string()])
+                .output();
+        }
     }
 }

@@ -26,11 +26,27 @@ JSON schema:
   "file_content": "<content>" | null,
   "cwd_override": "<path>" | null,
   "risk": "Safe" | "Dangerous",
+  "background": true | false,
   "reasoning": "<one sentence explaining why this step>"
 }
 
 Mark risk as Dangerous for: rm -rf, DROP TABLE, format disk,
 credential changes, curl piped to sh, overwriting without backup.
+
+Set background: true for any command that is expected to run
+indefinitely and should not block the next step. Examples:
+dev servers (npm run dev, cargo watch, python manage.py runserver),
+process managers (docker compose up without -d, pm2 start),
+file watchers, test watchers (jest --watch), and any command
+where the goal is to leave it running while continuing.
+
+Set background: false (the default) for everything else. Most
+commands are not background commands.
+
+When background is true, the command is started immediately and
+the agent moves to the next step without waiting for it to finish.
+The process keeps running in the background. At the end of the
+agent run, the user will be asked whether to keep it running.
 
 When the goal is fully complete, return action_type "Done".
 When you need information from the user before continuing, return
@@ -305,6 +321,7 @@ mod tests {
                 file_content: None,
                 cwd_override: None,
                 risk: Risk::Safe,
+                background: false,
                 reasoning: "Inspect files".to_owned(),
             },
             output: StepOutput {
@@ -344,6 +361,7 @@ mod tests {
                     file_content: None,
                     cwd_override: None,
                     risk: Risk::Safe,
+                    background: false,
                     reasoning: format!("reason-{index}"),
                 },
                 output: StepOutput {
