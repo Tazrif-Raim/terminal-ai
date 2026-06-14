@@ -324,6 +324,29 @@ mod tests {
         let _ = fs::remove_dir_all(outside);
     }
 
+    #[test]
+    fn test_cwd_override_allowed_with_windows_paths() {
+        // Create a mock state with a project root
+        let root = temp_path("root");
+        fs::create_dir_all(&root).expect("create root");
+        let state = test_state(&root);
+
+        // Test that the project root itself is allowed
+        assert!(cwd_override_allowed(&root, &state));
+
+        // Test that a subdirectory is allowed
+        let subdir = root.join("test_folder");
+        fs::create_dir_all(&subdir).expect("create subdir");
+        assert!(cwd_override_allowed(&subdir, &state));
+
+        // Test that a parent directory is NOT allowed (unless project root has no parent)
+        if let Some(parent) = root.parent() {
+            assert!(!cwd_override_allowed(parent, &state));
+        }
+
+        let _ = fs::remove_dir_all(root);
+    }
+
     fn test_state(root: &Path) -> AgentState {
         AgentState::new("test", root.to_path_buf(), HashMap::new())
     }
