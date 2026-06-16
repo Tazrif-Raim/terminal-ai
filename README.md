@@ -1,30 +1,37 @@
 # terminal-ai
 
-Terminal-native AI command assistant.
+Terminal-native AI command assistant for PowerShell (bash support planned).
 
-The intended user-facing command is:
+## Install / Update (Windows)
 
 ```powershell
-ai what is running on port 3000
+irm https://terminal-ai.lab-node.me/powershell.ps1 | iex
 ```
 
-The shell wrapper will own native terminal behavior such as inserting or running
-the selected command in the current shell session. The Rust binary, `ai-core`,
-will own argument parsing, LLM calls, command option parsing, safety checks, and
-the picker UI.
+Uninstall:
 
-Primary target for the first MVP is Windows Terminal with PowerShell. The project
-is structured so bash, zsh, fish, Linux, and macOS support can be added without
-rewriting the Rust core.
+```powershell
+irm https://terminal-ai.lab-node.me/uninstall.ps1 | iex
+```
 
-## Current State
+## Usage
 
-Phase 6 PowerShell flow is in progress:
+```powershell
+# Ask a question / run a command
+ai what is running on port 3000
 
-- `ai-core/` contains the Rust binary crate.
-- `shell/powershell.ps1` contains the current PowerShell wrapper.
-- Other shell wrappers are placeholders for later phases.
-- `docs/TODO.md` tracks the implementation phases.
+# Run in agent mode (multi-step autonomous execution)
+ai --agent setup a new React project with TypeScript
+
+# Dry-run agent mode (preview steps without executing)
+ai --agent --dry-run refactor the auth module
+
+# Include file contents in context
+ai --agent how to run the app --files README.md
+
+# View recent agent audit logs
+ai --agent-logs
+```
 
 ## PowerShell Setup
 
@@ -40,55 +47,28 @@ Load the wrapper in the current PowerShell session:
 . .\shell\powershell.ps1
 ```
 
-To load it automatically, add this line to your PowerShell profile:
+To load automatically, add to your PowerShell profile:
 
 ```powershell
 . E:\personal\terminal-ai\shell\powershell.ps1
 ```
 
-Usage:
+## Picker Controls
 
-```powershell
-ai what is running on port 3000
-ai summarize these files --files README.md docs\TODO.md
-```
+| Key | Action |
+|-----|--------|
+| `Enter` | Run selected command |
+| `e` | Edit command before running |
+| `c` | Copy command to clipboard |
+| `r` | Regenerate options |
+| `q` / `Esc` / `Ctrl+C` | Cancel |
 
-`Enter` in the picker runs the selected command in the current PowerShell
-session. `e` opens the selected command on a fresh editable line; press `Enter`
-there to run the edited command, or `Esc`/`Ctrl+C` to cancel. `c` copies, `r`
-regenerates options, and `q`/`Esc` cancel.
+## Agent Mode
 
-By default, `ai-core` sends lightweight local context to the LLM: current
-directory, shell/OS metadata, git branch/repo status, recent commit hashes,
-detected project files, and recent commands with likely secrets filtered out.
-File contents are not sent unless explicitly passed with `--files`; obvious
-secret files such as `.env` are skipped.
-
-Selected commands are appended to a local `commands.jsonl` history file, and
-prompt/options pairs are appended to `prompt-responses.jsonl`. These are local
-only. There is no telemetry, and the resolved config defaults
-`telemetry_enabled` to `false`.
-
-## MVP Windows Install
-
-Install and update use the same command:
-
-```powershell
-irm https://terminal-ai.lab-node.me/powershell.ps1 | iex
-```
-
-Uninstall:
-
-```powershell
-irm https://terminal-ai.lab-node.me/uninstall.ps1 | iex
-```
-
-The installer writes app files to `%LOCALAPPDATA%\terminal-ai`, keeps BYOK
-config in `%APPDATA%\terminal-ai\config.json`, adds the local bin directory to
-the user PATH, and adds a marked terminal-ai block to the PowerShell profile.
-
-The static release bundle is built by `scripts\package-windows.ps1`. VPS setup
-and GitHub Actions deploy secrets are documented in `docs\VPS_SETUP.md`.
+- `--agent` enables multi-step autonomous execution
+- `--dry-run` previews steps without executing
+- `--agent-logs` lists recent runs; `open` opens the latest log
+- Background processes (dev servers, watchers) are tracked and you're prompted to keep/kill them on exit
 
 ## Development
 

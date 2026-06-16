@@ -1,0 +1,183 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ===== Nord Theme for Tailwind v4 ===== */
+@theme inline {
+  --font-heading: var(--font-mono);
+  --font-mono: "JetBrains Mono Variable", monospace;
+
+  --color-nord-0: #2E3440;
+  --color-nord-1: #3B4252;
+  --color-nord-2: #434C5E;
+  --color-nord-3: #4C566A;
+  --color-nord-4: #D8DEE9;
+  --color-nord-5: #ECEFF4;
+  --color-nord-6: #88C0D0;
+  --color-nord-7: #81A1C1;
+  --color-nord-8: #A3BE8C;
+  --color-nord-9: #EBCB8B;
+  --color-nord-10: #BF616A;
+  --color-nord-11: #B48EAD;
+
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Nord palette CSS variables — permanently dark */
+:root,
+.dark {
+  --background: #2E3440;
+  --foreground: #D8DEE9;
+  --card: #3B4252;
+  --card-foreground: #D8DEE9;
+  --popover: #3B4252;
+  --popover-foreground: #D8DEE9;
+  --primary: #88C0D0;
+  --primary-foreground: #2E3440;
+  --secondary: #3B4252;
+  --secondary-foreground: #D8DEE9;
+  --muted: #434C5E;
+  --muted-foreground: #4C566A;
+  --accent: #81A1C1;
+  --accent-foreground: #2E3440;
+  --destructive: #BF616A;
+  --destructive-foreground: #2E3440;
+  --border: #434C5E;
+  --input: #434C5E;
+  --ring: #88C0D0;
+  --radius: 0.125rem;
+  --chart-1: #88C0D0;
+  --chart-2: #81A1C1;
+  --chart-3: #B48EAD;
+  --chart-4: #A3BE8C;
+  --chart-5: #EBCB8B;
+  --sidebar: #3B4252;
+  --sidebar-foreground: #D8DEE9;
+  --sidebar-primary: #88C0D0;
+  --sidebar-primary-foreground: #2E3440;
+  --sidebar-accent: #434C5E;
+  --sidebar-accent-foreground: #D8DEE9;
+  --sidebar-border: #434C5E;
+  --sidebar-ring: #88C0D0;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "JetBrains Mono Variable", monospace;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  html {
+    @apply font-mono;
+    scroll-behavior: smooth;
+  }
+  ::selection {
+    background: #88C0D0;
+    color: #2E3440;
+  }
+}
+
+/* ===== Terminal Visual Effects ===== */
+
+/* Scanline CRT overlay */
+.scanline::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(255, 255, 255, 0.015) 2px,
+    rgba(255, 255, 255, 0.015) 4px
+  );
+}
+
+/* Animated dot-grid background */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(67, 76, 94, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(67, 76, 94, 0.12) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Blinking cursor */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.animate-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* Fade in */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
+}
+
+/* Glow effects */
+.glow-cyan {
+  text-shadow: 0 0 8px rgba(136, 192, 208, 0.5), 0 0 20px rgba(136, 192, 208, 0.15);
+}
+.glow-green {
+  text-shadow: 0 0 8px rgba(163, 190, 140, 0.5), 0 0 20px rgba(163, 190, 140, 0.15);
+}
+
+/* Smooth section separator */
+.section-divider {
+  @apply my-20 border-0 text-center text-nord-3 text-xs tracking-widest;
+  font-family: "JetBrains Mono Variable", monospace;
+}
