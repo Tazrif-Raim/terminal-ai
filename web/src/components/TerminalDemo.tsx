@@ -115,7 +115,7 @@ export function TerminalDemo() {
   return (
     <div
       ref={containerRef}
-      className="terminal-window mx-auto w-full max-w-2xl"
+      className="terminal-window mx-auto w-full max-w-2xl rounded border border-nord-2"
     >
       {/* Window title bar */}
       <div className="flex items-center gap-1.5 border-b border-nord-2 bg-nord-1 px-3 py-2">
@@ -123,12 +123,12 @@ export function TerminalDemo() {
         <span className="size-2.5 rounded-full bg-nord-9" />
         <span className="size-2.5 rounded-full bg-nord-8" />
         <span className="ml-2 text-[10px] text-nord-3 tracking-wide">
-          terminal-ai — bash
+          terminal-ai
         </span>
       </div>
 
       {/* Terminal content */}
-      <div className="min-h-[260px] bg-nord-0 p-4 font-mono text-sm leading-relaxed">
+      <div className="min-h-65 bg-nord-0 p-4 font-mono text-sm leading-relaxed rounded">
         {currentFrame.map((line, li) => {
           if (li > visibleLines) return null
           const typed = typedChars[li] ?? line.text.length

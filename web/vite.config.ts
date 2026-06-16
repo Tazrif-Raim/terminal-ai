@@ -5,7 +5,7 @@ import { defineConfig } from "vite"
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: process.env.GH_PAGES ? "/terminal-ai/" : "/",
+  base: "/terminal-ai/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
