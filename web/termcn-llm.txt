@@ -1,0 +1,349 @@
+# termcn
+
+> A collection of beautifully designed, accessible, and customizable terminal UI components. Built on Ink and OpenTUI. Works with shadcn/ui. Use this index to discover the available documentation pages, markdown mirrors, and registry resources before browsing.
+
+## Docs
+
+- Overview: undefined
+  - [Introduction](/docs.md): Copy-paste terminal UI components for React. Built on Ink and OpenTUI, works with the shadcn CLI.
+  - [Installation](/docs/installation.md): Install terminal components, hooks, and themes from the registry.
+  - [Theming](/docs/theming.md): Terminal themes, ThemeProvider, and custom palettes for Ink and OpenTUI apps.
+  - [MCP](/docs/mcp.md): Learn how to use the shadcn MCP (Model Context Protocol) server with termcn.
+  - [Registry](/docs/registry.md): Learn how to use the termcn registry with the shadcn CLI.
+- Themes: undefined
+  - [Themes](/docs/themes.md): Here you can find all the terminal themes available in the library.
+  - [Default](/docs/themes/default.md): The default termcn terminal theme.
+  - [Catppuccin](/docs/themes/catppuccin.md): A Catppuccin theme for rich terminal UI previews.
+  - [Dracula](/docs/themes/dracula.md): A purple-heavy Dracula theme for terminal UI components.
+  - [High Contrast](/docs/themes/high-contrast.md): High contrast themes for dark and light terminal backgrounds.
+  - [High Contrast Light](/docs/themes/high-contrast-light.md): WCAG-friendly light high-contrast theme.
+  - [Monokai](/docs/themes/monokai.md): A classic Monokai-inspired theme for terminal apps.
+  - [Nord](/docs/themes/nord.md): A cool Nord palette tuned for terminal contrast.
+  - [One Dark](/docs/themes/one-dark.md): A One Dark theme for terminal components.
+  - [Solarized](/docs/themes/solarized.md): A Solarized theme for terminal components.
+  - [Tokyo Night](/docs/themes/tokyo-night.md): Tokyo Night colors for terminal interfaces.
+  - [AMOLED](/docs/themes/amoled.md): High contrast dark theme with AMOLED-style pure black.
+  - [Aura](/docs/themes/aura.md): Soft, elegant theme with pastel purple tones.
+  - [Ayu](/docs/themes/ayu.md): Clean, modern theme inspired by Ayu terminal.
+  - [Carbonfox](/docs/themes/carbonfox.md): Minimal dark theme with carbon tones.
+  - [Catppuccin Frappe](/docs/themes/catppuccin-frappe.md): Catppuccin frappe flavor - soothing pastel palette.
+  - [Catppuccin Macchiato](/docs/themes/catppuccin-macchiato.md): Catppuccin macchiato flavor - deeper pastel tones.
+  - [Cobalt2](/docs/themes/cobalt2.md): Vibrant blue and gold theme with deep contrast.
+  - [Cursor](/docs/themes/cursor.md): Cursor IDE theme - clean and modern dark theme.
+  - [Everforest](/docs/themes/everforest.md): Warm dark theme with forest green tones.
+  - [Flexoki](/docs/themes/flexoki.md): Versatile theme with warm colors and good contrast.
+  - [GitHub](/docs/themes/github.md): GitHub's official dark theme.
+  - [Gruvbox](/docs/themes/gruvbox.md): Retro-style theme with warm earth tones.
+  - [Kanagawa](/docs/themes/kanagawa.md): Japanese-inspired theme with wave motifs.
+  - [Lucent Orng](/docs/themes/lucent-orng.md): Warm orange theme with translucent feel.
+  - [Material](/docs/themes/material.md): Material Design color palette theme.
+  - [Matrix](/docs/themes/matrix.md): Green code rain inspired theme.
+  - [Mercury](/docs/themes/mercury.md): Clean and minimal dark theme.
+  - [Night Owl](/docs/themes/nightowl.md): Night owl theme optimized for late-night coding.
+  - [OC-2](/docs/themes/oc-2.md): Clean, minimal theme with high contrast.
+  - [One Dark Pro](/docs/themes/onedarkpro.md): One Dark Pro - VS Code theme version.
+  - [OpenCode](/docs/themes/opencode.md): The official OpenCode theme.
+  - [Orng](/docs/themes/orng.md): Vibrant orange theme with high contrast.
+  - [Osaka Jade](/docs/themes/osaka-jade.md): Japanese-inspired theme with jade green tones.
+  - [Palenight](/docs/themes/palenight.md): Purple-tinted dark theme from React Native.
+  - [Rose Pine](/docs/themes/rosepine.md): Dark theme with warm rose tones.
+  - [Shades of Purple](/docs/themes/shadesofpurple.md): Bold purple theme with vibrant accents.
+  - [Synthwave '84](/docs/themes/synthwave84.md): Retro-futuristic theme with neon colors.
+  - [Vercel](/docs/themes/vercel.md): Vercel's official brand colors.
+  - [Vesper](/docs/themes/vesper.md): Minimal stark theme with high contrast.
+  - [Zenburn](/docs/themes/zenburn.md): Low-contrast theme for long coding sessions.
+- Components: undefined
+  - [Components](/docs/components.md): Here you can find all the terminal components available in the library.
+  - Ink: undefined
+    - [Ink](/docs/components/ink.md): React-powered terminal components rendered with Ink.
+    - Layout: undefined
+      - [Layout](/docs/components/ink/layout.md): Components for structuring and positioning content in your terminal UI.
+      - [Aspect Ratio](/docs/components/ink/layout/aspect-ratio.md): Constrains children to a given aspect ratio
+      - [Box](/docs/components/ink/layout/box.md): Enhanced flexbox container with theme-aware borders
+      - [Center](/docs/components/ink/layout/center.md): Centers children horizontally and vertically
+      - [Columns](/docs/components/ink/layout/columns.md): Multi-column layout with configurable widths
+      - [Divider](/docs/components/ink/layout/divider.md): Horizontal or vertical divider / rule
+      - [Grid](/docs/components/ink/layout/grid.md): Rows × columns grid layout
+      - [Scroll View](/docs/components/ink/layout/scroll-view.md): Scrollable container with scrollbar
+      - [Spacer](/docs/components/ink/layout/spacer.md): Flexible space between flex children
+      - [Stack](/docs/components/ink/layout/stack.md): Vertical/horizontal stack with gap
+    - Typography: undefined
+      - [Typography](/docs/components/ink/typography.md): Components for rendering and styling text in your terminal UI.
+      - [Badge](/docs/components/ink/typography/badge.md): Semantic status indicator badge (success/error/warning/info)
+      - [Big Text](/docs/components/ink/typography/big-text.md): Figlet-style large ASCII art text
+      - [Code](/docs/components/ink/typography/code.md): Syntax-highlighted code block (50+ languages)
+      - [Digits](/docs/components/ink/typography/digits.md): Box-drawing character numerals
+      - [Gradient](/docs/components/ink/typography/gradient.md): Color gradient text
+      - [Heading](/docs/components/ink/typography/heading.md): h1–h4 styled headings with optional figlet ASCII art
+      - [Link](/docs/components/ink/typography/link.md): OSC 8 clickable hyperlink
+      - [Markdown](/docs/components/ink/typography/markdown.md): Full markdown renderer for terminal
+      - [Tag](/docs/components/ink/typography/tag.md): Removable chip/tag
+    - Input: undefined
+      - [Input](/docs/components/ink/input.md): Text input components for capturing user input in the terminal.
+      - [Email Input](/docs/components/ink/input/email-input.md): Email input with validation and domain suggestions
+      - [Masked Input](/docs/components/ink/input/masked-input.md): Masked input for phone, date, credit card formats
+      - [Number Input](/docs/components/ink/input/number-input.md): Numeric input with increment/decrement and bounds
+      - [Password Input](/docs/components/ink/input/password-input.md): Password input with masked characters and reveal toggle
+      - [Path Input](/docs/components/ink/input/path-input.md): Filesystem path input with tab autocomplete
+      - [Search Input](/docs/components/ink/input/search-input.md): Fuzzy search input with autocomplete
+      - [Text Area](/docs/components/ink/input/text-area.md): Multi-line text editor with word wrap
+      - [Text Input](/docs/components/ink/input/text-input.md): Single-line text input with placeholder, validation, mask
+    - Selection: undefined
+      - [Selection](/docs/components/ink/selection.md): Components for selecting values, options, and choices in the terminal.
+      - [Checkbox](/docs/components/ink/selection/checkbox.md): Checkbox with indeterminate state
+      - [Checkbox Group](/docs/components/ink/selection/checkbox-group.md): Checkbox group with min/max selection
+      - [Color Picker](/docs/components/ink/selection/color-picker.md): Color picker with palette, hex, and RGB input
+      - [Multi Select](/docs/components/ink/selection/multi-select.md): Multi-select list with checkboxes and select-all
+      - [Radio Group](/docs/components/ink/selection/radio-group.md): Mutually exclusive radio button group
+      - [Select](/docs/components/ink/selection/select.md): Single-select dropdown with arrow-key navigation
+      - [Tag Input](/docs/components/ink/selection/tag-input.md): Add and remove tags inline
+      - [Tree Select](/docs/components/ink/selection/tree-select.md): Hierarchical tree selection
+    - Data: undefined
+      - [Data](/docs/components/ink/data.md): Components for displaying and visualizing structured data in the terminal.
+      - [Card](/docs/components/ink/data/card.md): Card with header, body, and footer slots
+      - [Data Grid](/docs/components/ink/data/data-grid.md): Advanced data grid with sorting, filtering, pagination, and cell editing
+      - [Definition](/docs/components/ink/data/definition.md): Term–description definition list
+      - [Diff View](/docs/components/ink/data/diff-view.md): Unified, split, and inline diff viewer with LCS-based diff algorithm and line numbers
+      - [Directory Tree](/docs/components/ink/data/directory-tree.md): Filesystem browser with expand/collapse
+      - [Git Status](/docs/components/ink/data/git-status.md): Git status display (branch, staged, modified, ahead/behind)
+      - [JSON](/docs/components/ink/data/json.md): Pretty-printed JSON with collapsible nodes
+      - [Key Value](/docs/components/ink/data/key-value.md): Aligned key–value pairs
+      - [List](/docs/components/ink/data/list.md): Navigable list with optional filtering
+      - [Table](/docs/components/ink/data/table.md): Sortable, selectable, paginated data table
+      - [Tree](/docs/components/ink/data/tree.md): Expandable/collapsible tree view
+      - [Virtual List](/docs/components/ink/data/virtual-list.md): Virtualized list for 10k+ items
+    - Feedback: undefined
+      - [Feedback](/docs/components/ink/feedback.md): Components for showing progress, status, and notifications in the terminal.
+      - [Alert](/docs/components/ink/feedback/alert.md): Alert box with success/error/warning/info variants
+      - [Banner](/docs/components/ink/feedback/banner.md): Full-width announcement banner
+      - [Multi Progress](/docs/components/ink/feedback/multi-progress.md): Parallel progress display for package managers, build pipelines, and deploy tools
+      - [Progress Bar](/docs/components/ink/feedback/progress-bar.md): Determinate progress bar with percent and value/total display
+      - [Progress Circle](/docs/components/ink/feedback/progress-circle.md): Circular progress indicator using Unicode braille
+      - [Skeleton](/docs/components/ink/feedback/skeleton.md): Shimmer loading placeholder
+      - [Spinner](/docs/components/ink/feedback/spinner.md): Animated spinner with 12+ styles
+      - [Status Message](/docs/components/ink/feedback/status-message.md): Inline status message with icon and color
+      - [Toast](/docs/components/ink/feedback/toast.md): Auto-dismissing toast notification
+    - Navigation: undefined
+      - [Navigation](/docs/components/ink/navigation.md): Components for navigating between views and content in the terminal.
+      - [Breadcrumb](/docs/components/ink/navigation/breadcrumb.md): Breadcrumb navigation trail
+      - [Command Palette](/docs/components/ink/navigation/command-palette.md): VS Code–style command palette with fuzzy search
+      - [Menu](/docs/components/ink/navigation/menu.md): Dropdown menu with nested submenus
+      - [Pagination](/docs/components/ink/navigation/pagination.md): Page navigation with prev/next and jump
+      - [Sidebar](/docs/components/ink/navigation/sidebar.md): Collapsible navigation sidebar panel
+      - [Tabbed Content](/docs/components/ink/navigation/tabbed-content.md): Tab bar wired to content panels
+      - [Tabs](/docs/components/ink/navigation/tabs.md): Tab bar with left/right arrow and tab-key navigation
+    - Overlays: undefined
+      - [Overlays](/docs/components/ink/overlays.md): Components for dialogs, modals, tooltips, and other overlay content.
+      - [Dialog](/docs/components/ink/overlays/dialog.md): Confirmation dialog with OK/Cancel actions
+      - [Drawer](/docs/components/ink/overlays/drawer.md): Slide-in panel from any edge
+      - [Modal](/docs/components/ink/overlays/modal.md): Focus-trapped overlay modal, close with Esc
+      - [Notification Center](/docs/components/ink/overlays/notification-center.md): Persistent queue-based notification panel with useNotifications hook
+      - [Popover](/docs/components/ink/overlays/popover.md): Positioned popover with arbitrary content
+      - [Tooltip](/docs/components/ink/overlays/tooltip.md): Contextual tooltip on focus or hover
+    - Forms: undefined
+      - [Forms](/docs/components/ink/forms.md): Components for building multi-step forms and handling user submissions.
+      - [Confirm](/docs/components/ink/forms/confirm.md): Yes/No confirmation prompt
+      - [Date Picker](/docs/components/ink/forms/date-picker.md): Calendar date picker with keyboard navigation
+      - [File Picker](/docs/components/ink/forms/file-picker.md): Interactive file browser and picker
+      - [Form](/docs/components/ink/forms/form.md): Form container with validation, Ctrl+S submit, and dirty tracking
+      - [Form Field](/docs/components/ink/forms/form-field.md): Form field wrapper with label, hint, and error
+      - [Time Picker](/docs/components/ink/forms/time-picker.md): Time picker with hour/minute/second spinners
+      - [Wizard](/docs/components/ink/forms/wizard.md): Multi-step wizard with per-step validation
+    - Utility: undefined
+      - [Utility](/docs/components/ink/utility.md): Utility components for common terminal patterns like clipboard, timers, and panels.
+      - [Clipboard](/docs/components/ink/utility/clipboard.md): Copy-to-clipboard button with success feedback
+      - [Clock](/docs/components/ink/utility/clock.md): Real-time clock display with 12h/24h and date
+      - [Embedded Terminal](/docs/components/ink/utility/embedded-terminal.md): Embedded PTY terminal panel (requires node-pty peer)
+      - [Error Boundary](/docs/components/ink/utility/error-boundary.md): React error boundary with graceful terminal display
+      - [Help](/docs/components/ink/utility/help.md): Auto-generated help panel from a keymap
+      - [Image](/docs/components/ink/utility/image.md): Image renderer with iTerm2/Kitty protocol and ASCII fallback
+      - [Keyboard Shortcuts](/docs/components/ink/utility/keyboard-shortcuts.md): Formatted keyboard shortcut reference table
+      - [Log](/docs/components/ink/utility/log.md): Scrolling log viewer with severity levels and filtering
+      - [Panel](/docs/components/ink/utility/panel.md): Titled bordered panel
+      - [QR Code](/docs/components/ink/utility/qr-code.md): Unicode block QR code generator
+      - [Stopwatch](/docs/components/ink/utility/stopwatch.md): Count-up stopwatch with laps and reset
+      - [Timer](/docs/components/ink/utility/timer.md): Countdown timer with pause/resume and auto-start
+      - [Toggle](/docs/components/ink/utility/toggle.md): Toggle/switch component with on/off labels
+    - Charts: undefined
+      - [Charts](/docs/components/ink/charts.md): Components for rendering charts and data visualizations in the terminal.
+      - [Bar Chart](/docs/components/ink/charts/bar-chart.md): Horizontal and vertical bar chart with labels
+      - [Gauge](/docs/components/ink/charts/gauge.md): Arc/speedometer gauge meter
+      - [Heat Map](/docs/components/ink/charts/heat-map.md): Grid heatmap with color intensity scale
+      - [Line Chart](/docs/components/ink/charts/line-chart.md): ASCII line chart with axes and multi-series support
+      - [Pie Chart](/docs/components/ink/charts/pie-chart.md): Unicode block pie chart with legend
+      - [Sparkline](/docs/components/ink/charts/sparkline.md): Inline Unicode braille sparkline chart
+    - AI: undefined
+      - [AI](/docs/components/ink/ai.md): Components for building AI-powered chat interfaces and tool interactions.
+      - [Chat Message](/docs/components/ink/ai/chat-message.md): Chat message bubble with role label, streaming indicator, and collapsible content
+      - [Chat Thread](/docs/components/ink/ai/chat-thread.md): Scrollable container for stacking ChatMessage components in a conversation thread
+      - [Conversation History](/docs/components/ink/ai/conversation-history.md): Arrow-key scrollable stack for long chat threads
+      - [Error Retry](/docs/components/ink/ai/error-retry.md): Inline error callout with retry and dismiss shortcuts
+      - [File Change](/docs/components/ink/ai/file-change.md): Interactive file-change review list with diff expansion, per-file accept/reject actions, and accept-all shortcut
+      - [Model Selector](/docs/components/ink/ai/model-selector.md): Keyboard-navigable list for selecting an AI model, with optional provider grouping and context-window display
+      - [Streaming Text](/docs/components/ink/ai/streaming-text.md): Token-by-token streaming text with blinking cursor and optional typing animation
+      - [Thinking Block](/docs/components/ink/ai/thinking-block.md): Collapsible block for displaying extended thinking / reasoning content from an AI model
+      - [Token Usage](/docs/components/ink/ai/token-usage.md): Compact token counter showing prompt and completion usage with optional cost estimate; also exports ContextMeter for visualising context window fill
+      - [Tool Approval](/docs/components/ink/ai/tool-approval.md): Interactive approval prompt for AI tool calls with risk-level badge, args display, and auto-deny timeout
+      - [Tool Call](/docs/components/ink/ai/tool-call.md): Displays an AI tool invocation with status indicator, args, result, and elapsed time
+  - OpenTUI: undefined
+    - [OpenTUI](/docs/components/opentui.md): OpenTUI React components for building terminal user interfaces.
+    - Layout: undefined
+      - [Layout](/docs/components/opentui/layout.md): Components for structuring and positioning content in your terminal UI.
+      - [Aspect Ratio](/docs/components/opentui/layout/aspect-ratio.md): Constrains children to a given aspect ratio
+      - [Box](/docs/components/opentui/layout/box.md): Enhanced flexbox container with theme-aware borders
+      - [Center](/docs/components/opentui/layout/center.md): Centers children horizontally and vertically
+      - [Columns](/docs/components/opentui/layout/columns.md): Multi-column layout with configurable widths
+      - [Divider](/docs/components/opentui/layout/divider.md): Horizontal or vertical divider / rule
+      - [Grid](/docs/components/opentui/layout/grid.md): Rows × columns grid layout
+      - [Scroll View](/docs/components/opentui/layout/scroll-view.md): Scrollable container with scrollbar
+      - [Spacer](/docs/components/opentui/layout/spacer.md): Flexible space between flex children
+      - [Stack](/docs/components/opentui/layout/stack.md): Vertical/horizontal stack with gap
+    - Typography: undefined
+      - [Typography](/docs/components/opentui/typography.md): Components for rendering and styling text in your terminal UI.
+      - [Badge](/docs/components/opentui/typography/badge.md): Semantic status indicator badge (success/error/warning/info)
+      - [Big Text](/docs/components/opentui/typography/big-text.md): Figlet-style large ASCII art text
+      - [Code](/docs/components/opentui/typography/code.md): Syntax-highlighted code block (50+ languages)
+      - [Digits](/docs/components/opentui/typography/digits.md): Box-drawing character numerals
+      - [Gradient](/docs/components/opentui/typography/gradient.md): Color gradient text
+      - [Heading](/docs/components/opentui/typography/heading.md): h1–h4 styled headings with optional figlet ASCII art
+      - [Link](/docs/components/opentui/typography/link.md): OSC 8 clickable hyperlink
+      - [Markdown](/docs/components/opentui/typography/markdown.md): Full markdown renderer for terminal
+      - [Tag](/docs/components/opentui/typography/tag.md): Removable chip/tag
+    - Input: undefined
+      - [Input](/docs/components/opentui/input.md): Text input components for capturing user input in the terminal.
+      - [Email Input](/docs/components/opentui/input/email-input.md): Email input with validation and domain suggestions
+      - [Masked Input](/docs/components/opentui/input/masked-input.md): Masked input for phone, date, credit card formats
+      - [Number Input](/docs/components/opentui/input/number-input.md): Numeric input with increment/decrement and bounds
+      - [Password Input](/docs/components/opentui/input/password-input.md): Password input with masked characters and reveal toggle
+      - [Path Input](/docs/components/opentui/input/path-input.md): Filesystem path input with tab autocomplete
+      - [Search Input](/docs/components/opentui/input/search-input.md): Fuzzy search input with autocomplete
+      - [Text Area](/docs/components/opentui/input/text-area.md): Multi-line text editor with word wrap
+      - [Text Input](/docs/components/opentui/input/text-input.md): Single-line text input with placeholder, validation, mask
+    - Selection: undefined
+      - [Selection](/docs/components/opentui/selection.md): Components for selecting values, options, and choices in the terminal.
+      - [Checkbox](/docs/components/opentui/selection/checkbox.md): Checkbox with indeterminate state
+      - [Checkbox Group](/docs/components/opentui/selection/checkbox-group.md): Checkbox group with min/max selection
+      - [Color Picker](/docs/components/opentui/selection/color-picker.md): Color picker with palette, hex, and RGB input
+      - [Multi Select](/docs/components/opentui/selection/multi-select.md): Multi-select list with checkboxes and select-all
+      - [Radio Group](/docs/components/opentui/selection/radio-group.md): Mutually exclusive radio button group
+      - [Select](/docs/components/opentui/selection/select.md): Single-select dropdown with arrow-key navigation
+      - [Tag Input](/docs/components/opentui/selection/tag-input.md): Add and remove tags inline
+      - [Tree Select](/docs/components/opentui/selection/tree-select.md): Hierarchical tree selection
+    - Data: undefined
+      - [Data](/docs/components/opentui/data.md): Components for displaying and visualizing structured data in the terminal.
+      - [Card](/docs/components/opentui/data/card.md): Card with header, body, and footer slots
+      - [Data Grid](/docs/components/opentui/data/data-grid.md): Advanced data grid with sorting, filtering, pagination, and cell editing
+      - [Definition](/docs/components/opentui/data/definition.md): Term–description definition list
+      - [Diff View](/docs/components/opentui/data/diff-view.md): Unified, split, and inline diff viewer with LCS-based diff algorithm and line numbers
+      - [Directory Tree](/docs/components/opentui/data/directory-tree.md): Filesystem browser with expand/collapse
+      - [Git Status](/docs/components/opentui/data/git-status.md): Git status display (branch, staged, modified, ahead/behind)
+      - [JSON](/docs/components/opentui/data/json.md): Pretty-printed JSON with collapsible nodes
+      - [Key Value](/docs/components/opentui/data/key-value.md): Aligned key–value pairs
+      - [List](/docs/components/opentui/data/list.md): Navigable list with optional filtering
+      - [Table](/docs/components/opentui/data/table.md): Sortable, selectable, paginated data table
+      - [Tree](/docs/components/opentui/data/tree.md): Expandable/collapsible tree view
+      - [Virtual List](/docs/components/opentui/data/virtual-list.md): Virtualized list for 10k+ items
+    - Feedback: undefined
+      - [Feedback](/docs/components/opentui/feedback.md): Components for showing progress, status, and notifications in the terminal.
+      - [Alert](/docs/components/opentui/feedback/alert.md): Alert box with success/error/warning/info variants
+      - [Banner](/docs/components/opentui/feedback/banner.md): Full-width announcement banner
+      - [Multi Progress](/docs/components/opentui/feedback/multi-progress.md): Parallel progress display for package managers, build pipelines, and deploy tools
+      - [Progress Bar](/docs/components/opentui/feedback/progress-bar.md): Determinate progress bar with percent and value/total display
+      - [Progress Circle](/docs/components/opentui/feedback/progress-circle.md): Circular progress indicator using Unicode braille
+      - [Skeleton](/docs/components/opentui/feedback/skeleton.md): Shimmer loading placeholder
+      - [Spinner](/docs/components/opentui/feedback/spinner.md): Animated spinner with 12+ styles
+      - [Status Message](/docs/components/opentui/feedback/status-message.md): Inline status message with icon and color
+      - [Toast](/docs/components/opentui/feedback/toast.md): Auto-dismissing toast notification
+    - Navigation: undefined
+      - [Navigation](/docs/components/opentui/navigation.md): Components for navigating between views and content in the terminal.
+      - [Breadcrumb](/docs/components/opentui/navigation/breadcrumb.md): Breadcrumb navigation trail
+      - [Command Palette](/docs/components/opentui/navigation/command-palette.md): VS Code–style command palette with fuzzy search
+      - [Menu](/docs/components/opentui/navigation/menu.md): Dropdown menu with nested submenus
+      - [Pagination](/docs/components/opentui/navigation/pagination.md): Page navigation with prev/next and jump
+      - [Sidebar](/docs/components/opentui/navigation/sidebar.md): Collapsible navigation sidebar panel
+      - [Tabbed Content](/docs/components/opentui/navigation/tabbed-content.md): Tab bar wired to content panels
+      - [Tabs](/docs/components/opentui/navigation/tabs.md): Tab bar with left/right arrow and tab-key navigation
+    - Overlays: undefined
+      - [Overlays](/docs/components/opentui/overlays.md): Components for dialogs, modals, tooltips, and other overlay content.
+      - [Dialog](/docs/components/opentui/overlays/dialog.md): Confirmation dialog with OK/Cancel actions
+      - [Drawer](/docs/components/opentui/overlays/drawer.md): Slide-in panel from any edge
+      - [Modal](/docs/components/opentui/overlays/modal.md): Focus-trapped overlay modal, close with Esc
+      - [Notification Center](/docs/components/opentui/overlays/notification-center.md): Persistent queue-based notification panel with useNotifications hook
+      - [Popover](/docs/components/opentui/overlays/popover.md): Positioned popover with arbitrary content
+      - [Tooltip](/docs/components/opentui/overlays/tooltip.md): Contextual tooltip on focus or hover
+    - Forms: undefined
+      - [Forms](/docs/components/opentui/forms.md): Components for building multi-step forms and handling user submissions.
+      - [Confirm](/docs/components/opentui/forms/confirm.md): Yes/No confirmation prompt
+      - [Date Picker](/docs/components/opentui/forms/date-picker.md): Calendar date picker with keyboard navigation
+      - [File Picker](/docs/components/opentui/forms/file-picker.md): Interactive file browser and picker
+      - [Form](/docs/components/opentui/forms/form.md): Form container with validation, Ctrl+S submit, and dirty tracking
+      - [Form Field](/docs/components/opentui/forms/form-field.md): Form field wrapper with label, hint, and error
+      - [Time Picker](/docs/components/opentui/forms/time-picker.md): Time picker with hour/minute/second spinners
+      - [Wizard](/docs/components/opentui/forms/wizard.md): Multi-step wizard with per-step validation
+    - Utility: undefined
+      - [Utility](/docs/components/opentui/utility.md): Utility components for common terminal patterns like clipboard, timers, and panels.
+      - [Clipboard](/docs/components/opentui/utility/clipboard.md): Copy-to-clipboard button with success feedback
+      - [Clock](/docs/components/opentui/utility/clock.md): Real-time clock display with 12h/24h and date
+      - [Embedded Terminal](/docs/components/opentui/utility/embedded-terminal.md): Embedded PTY terminal panel (requires node-pty peer)
+      - [Error Boundary](/docs/components/opentui/utility/error-boundary.md): React error boundary with graceful terminal display
+      - [Help](/docs/components/opentui/utility/help.md): Auto-generated help panel from a keymap
+      - [Image](/docs/components/opentui/utility/image.md): Image renderer with iTerm2/Kitty protocol and ASCII fallback
+      - [Keyboard Shortcuts](/docs/components/opentui/utility/keyboard-shortcuts.md): Formatted keyboard shortcut reference table
+      - [Log](/docs/components/opentui/utility/log.md): Scrolling log viewer with severity levels and filtering
+      - [Panel](/docs/components/opentui/utility/panel.md): Titled bordered panel
+      - [QR Code](/docs/components/opentui/utility/qr-code.md): Unicode block QR code generator
+      - [Stopwatch](/docs/components/opentui/utility/stopwatch.md): Count-up stopwatch with laps and reset
+      - [Timer](/docs/components/opentui/utility/timer.md): Countdown timer with pause/resume and auto-start
+      - [Toggle](/docs/components/opentui/utility/toggle.md): Toggle/switch component with on/off labels
+    - Charts: undefined
+      - [Charts](/docs/components/opentui/charts.md): Components for rendering charts and data visualizations in the terminal.
+      - [Bar Chart](/docs/components/opentui/charts/bar-chart.md): Horizontal and vertical bar chart with labels
+      - [Gauge](/docs/components/opentui/charts/gauge.md): Arc/speedometer gauge meter
+      - [Heat Map](/docs/components/opentui/charts/heat-map.md): Grid heatmap with color intensity scale
+      - [Line Chart](/docs/components/opentui/charts/line-chart.md): ASCII line chart with axes and multi-series support
+      - [Pie Chart](/docs/components/opentui/charts/pie-chart.md): Unicode block pie chart with legend
+      - [Sparkline](/docs/components/opentui/charts/sparkline.md): Inline Unicode braille sparkline chart
+    - AI: undefined
+      - [AI](/docs/components/opentui/ai.md): Components for building AI-powered chat interfaces and tool interactions.
+      - [Chat Message](/docs/components/opentui/ai/chat-message.md): Chat message bubble with role label, streaming indicator, and collapsible content
+      - [Chat Thread](/docs/components/opentui/ai/chat-thread.md): Scrollable container for stacking ChatMessage components in a conversation thread
+      - [File Change](/docs/components/opentui/ai/file-change.md): Interactive file-change review list with diff expansion, per-file accept/reject actions, and accept-all shortcut
+      - [Model Selector](/docs/components/opentui/ai/model-selector.md): Keyboard-navigable list for selecting an AI model, with optional provider grouping and context-window display
+      - [Streaming Text](/docs/components/opentui/ai/streaming-text.md): Token-by-token streaming text with blinking cursor and optional typing animation
+      - [Thinking Block](/docs/components/opentui/ai/thinking-block.md): Collapsible block for displaying extended thinking / reasoning content from an AI model
+      - [Token Usage](/docs/components/opentui/ai/token-usage.md): Compact token counter showing prompt and completion usage with optional cost estimate; also exports ContextMeter for visualising context window fill
+      - [Tool Approval](/docs/components/opentui/ai/tool-approval.md): Interactive approval prompt for AI tool calls with risk-level badge, args display, and auto-deny timeout
+      - [Tool Call](/docs/components/opentui/ai/tool-call.md): Displays an AI tool invocation with status indicator, args, result, and elapsed time
+- Templates: undefined
+  - [Templates](/docs/templates.md): Pre-built full-screen templates and layouts for common terminal app patterns.
+  - Ink: undefined
+    - [Ink Templates](/docs/templates/ink.md): Pre-built terminal UI templates for Ink framework.
+    - [App Shell](/docs/templates/ink/app-shell.md): Full-screen TUI layout with header, tip bar, full-width input, scrollable content, and hints footer
+    - [Bullet List](/docs/templates/ink/bullet-list.md): Nested structured content with ●/└/□ bullet prefixes
+    - [Help Screen](/docs/templates/ink/help-screen.md): Figlet banner + tagline + aligned Options/Commands help sections
+    - [Info Box](/docs/templates/ink/info-box.md): Bordered info panel with header, key-value rows, and tree-prefix rows
+    - [Login Flow](/docs/templates/ink/login-flow.md): Full-page onboarding/login screen with announcement banner, big ASCII title, description, and numbered select
+    - [Setup Flow](/docs/templates/ink/setup-flow.md): @clack-style step flow with ◇/◆/│ visual language, badge, info steps, and multi-select
+    - [Splash Screen](/docs/templates/ink/splash-screen.md): Styled startup banner with big ASCII art title, subtitle, author credit, and status line
+    - [Usage Monitor](/docs/templates/ink/usage-monitor.md): Real-time dashboard with diamond header, progress metrics, burn rate, predictions, and status bar
+    - [Welcome Screen](/docs/templates/ink/welcome-screen.md): Two-panel welcome dashboard with titled border, logo, greeting, and sections
+  - OpenTUI: undefined
+    - [OpenTUI Templates](/docs/templates/opentui.md): Pre-built terminal UI templates for OpenTUI framework.
+    - [App Shell](/docs/templates/opentui/app-shell.md): Full-screen TUI layout with header, tip bar, full-width input, scrollable content, and hints footer
+    - [Bullet List](/docs/templates/opentui/bullet-list.md): Nested structured content with ●/└/□ bullet prefixes
+    - [Help Screen](/docs/templates/opentui/help-screen.md): Figlet banner + tagline + aligned Options/Commands help sections
+    - [Info Box](/docs/templates/opentui/info-box.md): Bordered info panel with header, key-value rows, and tree-prefix rows
+    - [Login Flow](/docs/templates/opentui/login-flow.md): Full-page onboarding/login screen with announcement banner, big ASCII title, description, and numbered select
+    - [Setup Flow](/docs/templates/opentui/setup-flow.md): @clack-style step flow with ◇/◆/│ visual language, badge, info steps, and multi-select
+    - [Splash Screen](/docs/templates/opentui/splash-screen.md): Styled startup banner with big ASCII art title, subtitle, author credit, and status line
+    - [Usage Monitor](/docs/templates/opentui/usage-monitor.md): Real-time dashboard with diamond header, progress metrics, burn rate, predictions, and status bar
+    - [Welcome Screen](/docs/templates/opentui/welcome-screen.md): Two-panel welcome dashboard with titled border, logo, greeting, and sections
+
+## Machine-readable Resources
+
+- [Full documentation](https://www.termcn.dev/llms-full.txt)
+- [Homepage markdown](https://www.termcn.dev/llms.md/content.md)
+- [OpenAPI description](https://www.termcn.dev/openapi.json)
+- [API catalog](https://www.termcn.dev/.well-known/api-catalog)
+- [Agent skill](https://www.termcn.dev/.well-known/agent-skills/termcn-skill.md)
+- [shadcn MCP server documentation](https://ui.shadcn.com/docs/mcp)
