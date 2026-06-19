@@ -18,8 +18,6 @@ use crate::{
 };
 
 const TEMPERATURE: f32 = 0.1;
-const DEFAULT_CODEX_INSTRUCTIONS: &str =
-    "You are ChatGPT, a large language model trained by OpenAI.";
 #[derive(Debug)]
 pub(crate) enum LlmError {
     ClientBuild(reqwest::Error),
@@ -318,11 +316,7 @@ fn codex_responses_request(
 
     CodexResponsesRequest {
         model: config.model.clone(),
-        instructions: if instructions.is_empty() {
-            DEFAULT_CODEX_INSTRUCTIONS.to_owned()
-        } else {
-            instructions.join("\n\n")
-        },
+        instructions: instructions.join("\n\n"),
         input,
         store: false,
         stream: true,
