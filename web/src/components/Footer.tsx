@@ -33,7 +33,7 @@ export function Footer() {
           GitHub
         </a>
         <span className="text-nord-2">·</span>
-        <span>v0.1.0</span>
+        <span>v0.1.1</span>
       </div>
 
       {/* Bottom divider */}
