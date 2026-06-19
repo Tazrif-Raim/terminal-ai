@@ -1,4 +1,5 @@
 mod agent;
+mod codex_oauth;
 mod config;
 mod context;
 mod history;

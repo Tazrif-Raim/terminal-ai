@@ -7,11 +7,48 @@ use std::{
 };
 
 use crossterm::{
+    cursor,
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-    terminal,
+    style::{Stylize, SetBackgroundColor, ResetColor},
+    terminal, QueueableCommand,
 };
 use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
+
+use crate::codex_oauth;
+
+// ---------------------------------------------------------------------------
+// Provider selection
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ProviderMode {
+    OpenAiCompatible,
+    CodexOAuth,
+}
+
+impl ProviderMode {
+    fn label(self) -> &'static str {
+        match self {
+            Self::OpenAiCompatible => "OpenAI compatible API key",
+            Self::CodexOAuth => "Codex OAuth (Experimental)",
+        }
+    }
+}
+
+impl Default for ProviderMode {
+    fn default() -> Self {
+        Self::OpenAiCompatible
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProviderMenuChoice {
+    OpenAiApiKey,
+    CodexOAuth,
+    Exit,
+}
 
 const ENV_API_URL: &str = "LLM_API_URL";
 const ENV_API_KEY: &str = "LLM_API_KEY";
@@ -31,6 +68,7 @@ const CONFIG_INPUT_POLL: Duration = Duration::from_millis(15);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedConfig {
+    pub(crate) provider_mode: ProviderMode,
     pub(crate) api_url: String,
     pub(crate) api_key: String,
     pub(crate) model: String,
@@ -47,6 +85,7 @@ pub(crate) struct ResolvedConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PartialConfig {
+    provider_mode: Option<ProviderMode>,
     api_url: Option<String>,
     api_key: Option<String>,
     model: Option<String>,
@@ -63,6 +102,7 @@ pub(crate) struct PartialConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct RedactedConfig {
+    provider_mode: Option<ProviderMode>,
     api_url: Option<String>,
     api_key: Option<String>,
     model: Option<String>,
@@ -118,6 +158,8 @@ pub(crate) enum MissingField {
 #[serde(default)]
 struct FileConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
+    provider_mode: Option<ProviderMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     api_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     api_key: Option<String>,
@@ -164,6 +206,7 @@ enum ConfigInput {
 impl ResolvedConfig {
     pub(crate) fn redacted(&self) -> RedactedConfig {
         RedactedConfig {
+            provider_mode: Some(self.provider_mode),
             api_url: Some(self.api_url.clone()),
             api_key: Some(mask_api_key(&self.api_key)),
             model: Some(self.model.clone()),
@@ -183,6 +226,7 @@ impl ResolvedConfig {
 impl PartialConfig {
     pub(crate) fn redacted(&self) -> RedactedConfig {
         RedactedConfig {
+            provider_mode: self.provider_mode,
             api_url: self.api_url.clone(),
             api_key: self.api_key.as_deref().map(mask_api_key),
             model: self.model.clone(),
@@ -213,9 +257,12 @@ impl PartialConfig {
     fn into_resolved(self, config_path: PathBuf) -> Result<ResolvedConfig, ConfigError> {
         self.validate(&config_path)?;
 
+        let provider_mode = self.provider_mode.unwrap_or_default();
+
         Ok(ResolvedConfig {
-            api_url: self.api_url.expect("api_url checked above"),
-            api_key: self.api_key.expect("api_key checked above"),
+            provider_mode,
+            api_url: self.api_url.unwrap_or_else(default_codex_api_url),
+            api_key: self.api_key.unwrap_or_default(),
             model: self.model.expect("model checked above"),
             default_shell: self.default_shell,
             max_options: self.max_options,
@@ -230,20 +277,27 @@ impl PartialConfig {
     }
 
     fn missing_fields(&self) -> Vec<MissingField> {
-        let mut fields = Vec::new();
+        let is_codex = self.provider_mode == Some(ProviderMode::CodexOAuth);
 
+        if is_codex {
+            // Codex OAuth mode: only model is required
+            if self.model.is_none() {
+                return vec![MissingField::Model];
+            }
+            return vec![];
+        }
+
+        // OpenAI-compatible mode: all three required
+        let mut fields = Vec::new();
         if self.api_url.is_none() {
             fields.push(MissingField::ApiUrl);
         }
-
         if self.api_key.is_none() {
             fields.push(MissingField::ApiKey);
         }
-
         if self.model.is_none() {
             fields.push(MissingField::Model);
         }
-
         fields
     }
 }
@@ -362,15 +416,85 @@ pub(crate) fn configure_interactive(mode: ConfigEditMode) -> Result<ResolvedConf
     eprintln!("Config file: {}", path.display());
     eprintln!("{}", to_pretty_json(&current.redacted()));
     eprintln!();
-    eprintln!("Update values:");
-    eprintln!("Press Enter to keep a shown value, or type q to cancel.");
-    eprintln!();
 
-    let values = prompt_for_llm_values(&current, mode)?;
-    let saved = save_llm_config_values(&path, values)?;
+    // Provider selection menu
+    let current_provider = current.provider_mode.unwrap_or_default();
+    let selection = select_provider_menu(current_provider)?;
 
-    if saved {
-        eprintln!("Saved config to {}", path.display());
+    match selection {
+        ProviderMenuChoice::OpenAiApiKey => {
+            let mut updated = current;
+            updated.provider_mode = Some(ProviderMode::OpenAiCompatible);
+
+            eprintln!();
+            eprintln!("Update values:");
+            eprintln!("Press Enter to keep a shown value, or type q to cancel.");
+            eprintln!();
+
+            let values = prompt_for_llm_values(&updated, mode)?;
+            save_llm_config_values(
+                &path,
+                values,
+                Some(ProviderMode::OpenAiCompatible),
+            )?;
+
+            eprintln!("Saved config to {}", path.display());
+        }
+        ProviderMenuChoice::CodexOAuth => {
+            let store_path = codex_oauth::default_store_path()
+                .map_err(|_| ConfigError::ConfigDirUnavailable)?;
+            let status = codex_oauth::get_status(&store_path);
+
+            if status.logged_in {
+                let plan = status.plan_type.as_deref().unwrap_or("unknown");
+                let account = status.account_id.as_deref().unwrap_or("unknown");
+                eprintln!("Already signed in to Codex (plan: {plan}, account: {account})");
+
+                if status.is_expired {
+                    eprintln!("Token is expired or near expiry. Re-authenticating...");
+                    match codex_oauth::run_browser_login(&store_path, true) {
+                        Ok(_) => eprintln!("Re-authentication successful!"),
+                        Err(e) => {
+                            eprintln!("Warning: could not re-authenticate: {e}");
+                            eprintln!("Continuing with existing token...");
+                        }
+                    }
+                } else {
+                    let action = prompt_reauth_or_continue()?;
+                    if action {
+                        eprintln!();
+                        match codex_oauth::run_browser_login(&store_path, true) {
+                            Ok(_) => eprintln!("Re-authentication successful!"),
+                            Err(e) => {
+                                eprintln!("Warning: re-authentication failed: {e}");
+                                eprintln!("Continuing with existing token...");
+                            }
+                        }
+                    }
+                }
+            } else {
+                eprintln!("Signing in to Codex...");
+                match codex_oauth::run_browser_login(&store_path, true) {
+                    Ok(_) => eprintln!("Sign-in successful!"),
+                    Err(e) => {
+                        eprintln!("Sign-in failed: {e}");
+                        return Err(ConfigError::Cancelled);
+                    }
+                }
+            }
+
+            // Prompt for model
+            eprintln!();
+            let model = prompt_single_value("Model", current.model.as_deref())?;
+            let mut file_config = read_file_config(&path)?;
+            file_config.provider_mode = Some(ProviderMode::CodexOAuth);
+            if let Some(m) = model {
+                file_config.model = Some(m);
+            }
+            write_file_config(&path, &file_config)?;
+            eprintln!("Saved config to {}", path.display());
+        }
+        ProviderMenuChoice::Exit => {}
     }
 
     load_from_path_with_dotenv(&path, process_env, dotenv_path.as_deref())
@@ -402,6 +526,7 @@ fn load_partial_from_path(
     let file_config = read_file_config(path)?;
 
     Ok(PartialConfig {
+        provider_mode: file_config.provider_mode,
         api_url: env_value(ENV_API_URL, &env_lookup, dotenv).or_else(|| clean(file_config.api_url)),
         api_key: env_value(ENV_API_KEY, &env_lookup, dotenv).or_else(|| clean(file_config.api_key)),
         model: env_value(ENV_MODEL, &env_lookup, dotenv).or_else(|| clean(file_config.model)),
@@ -469,12 +594,20 @@ fn write_file_config(path: &Path, config: &FileConfig) -> Result<(), ConfigError
     })
 }
 
-fn save_llm_config_values(path: &Path, values: LlmConfigValues) -> Result<bool, ConfigError> {
-    if values == LlmConfigValues::default() {
+fn save_llm_config_values(
+    path: &Path,
+    values: LlmConfigValues,
+    provider_mode: Option<ProviderMode>,
+) -> Result<bool, ConfigError> {
+    if values == LlmConfigValues::default() && provider_mode.is_none() {
         return Ok(false);
     }
 
     let mut config = read_file_config(path)?;
+
+    if let Some(pm) = provider_mode {
+        config.provider_mode = Some(pm);
+    }
 
     if let Some(value) = values.api_url {
         config.api_url = Some(value);
@@ -490,6 +623,205 @@ fn save_llm_config_values(path: &Path, values: LlmConfigValues) -> Result<bool, 
 
     write_file_config(path, &config)?;
     Ok(true)
+}
+
+// ---------------------------------------------------------------------------
+// Interactive provider menu (crossterm raw-mode)
+// ---------------------------------------------------------------------------
+
+fn select_provider_menu(current: ProviderMode) -> Result<ProviderMenuChoice, ConfigError> {
+    let options = [ProviderMenuChoice::OpenAiApiKey, ProviderMenuChoice::CodexOAuth];
+    const EXIT_INDEX: usize = 2;
+
+    let _raw = RawModeGuard::enter()?;
+    let mut selected = match current {
+        ProviderMode::OpenAiCompatible => 0usize,
+        ProviderMode::CodexOAuth => 1,
+    };
+
+    loop {
+        render_provider_menu(selected, current);
+        let choice = read_menu_key()?;
+
+        match choice {
+            MenuKey::Up => {
+                if selected == 0 {
+                    selected = EXIT_INDEX;
+                } else {
+                    selected -= 1;
+                }
+            }
+            MenuKey::Down => {
+                if selected < EXIT_INDEX {
+                    selected += 1;
+                }
+            }
+            MenuKey::Select => {
+                if selected < options.len() {
+                    return Ok(options[selected]);
+                }
+                return Ok(ProviderMenuChoice::Exit);
+            }
+            MenuKey::Exit => {
+                return Ok(ProviderMenuChoice::Exit);
+            }
+            MenuKey::MoveToExit => {
+                selected = EXIT_INDEX;
+            }
+        }
+    }
+}
+
+fn render_provider_menu(selected: usize, active_provider: ProviderMode) {
+    let options = [
+        (ProviderMenuChoice::OpenAiApiKey, ProviderMode::OpenAiCompatible.label()),
+        (ProviderMenuChoice::CodexOAuth, ProviderMode::CodexOAuth.label()),
+    ];
+
+    let mut stderr = io::stderr();
+let _ = stderr.queue(terminal::Clear(terminal::ClearType::All));
+let _ = stderr.queue(cursor::MoveTo(0, 0));
+
+    let _ = writeln!(stderr, "Select an AI provider:");
+    let _ = writeln!(stderr);
+
+    for (i, &(ref choice, label)) in options.iter().enumerate() {
+        let is_selected = i == selected;
+        let is_active = matches!(
+            (choice, active_provider),
+            (ProviderMenuChoice::OpenAiApiKey, ProviderMode::OpenAiCompatible)
+                | (ProviderMenuChoice::CodexOAuth, ProviderMode::CodexOAuth)
+        );
+
+        // Highlight the selected line with a background color
+        if is_selected {
+            let _ = stderr.queue(SetBackgroundColor(crossterm::style::Color::DarkGrey));
+        }
+        let prefix = if is_active { "(*)" } else { "( )" };
+        let prefix_display: Box<dyn std::fmt::Display> = if is_active {
+            Box::new(prefix.green())
+        } else {
+            Box::new(prefix)
+        };
+        let _ = writeln!(stderr, "  {prefix_display} {label}");
+        if is_selected {
+            let _ = stderr.queue(ResetColor);
+        }
+    }
+
+    // Separator
+    let _ = writeln!(stderr, "  {}", "─".repeat(42));
+    // Exit option
+    let exit_label = "Exit";
+    const EXIT_INDEX: usize = 2;
+    let is_exit_selected = selected == EXIT_INDEX;
+    if is_exit_selected {
+        let _ = stderr.queue(SetBackgroundColor(crossterm::style::Color::DarkGrey));
+        let _ = writeln!(stderr, "  {exit_label}");
+        let _ = stderr.queue(ResetColor);
+    } else {
+        let _ = writeln!(stderr, "  {exit_label}");
+    }
+
+    let _ = writeln!(stderr);
+    let _ = writeln!(stderr, "Use ↑/↓ to navigate, Enter to select.");
+    let _ = stderr.flush();
+}
+
+// ---------------------------------------------------------------------------
+// Interactive helpers (simple yes/no, single value prompts)
+// ---------------------------------------------------------------------------
+
+fn prompt_reauth_or_continue() -> Result<bool, ConfigError> {
+    loop {
+        eprint!("Re-authenticate? [y/N]: ");
+        io::stderr().flush().map_err(|source| ConfigError::Input { source })?;
+
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .map_err(|source| ConfigError::Input { source })?;
+
+        match input.trim().to_ascii_lowercase().as_str() {
+            "y" | "yes" => return Ok(true),
+            "n" | "no" | "" => return Ok(false),
+            "q" | "quit" | "cancel" => return Err(ConfigError::Cancelled),
+            _ => {
+                eprintln!("Please answer y or n.");
+            }
+        }
+    }
+}
+
+fn prompt_single_value(label: &str, current: Option<&str>) -> Result<Option<String>, ConfigError> {
+    loop {
+        match current {
+            Some(value) => eprint!("{label} [{value}]: "),
+            None => eprint!("{label}: "),
+        }
+        io::stderr().flush().map_err(|source| ConfigError::Input { source })?;
+
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .map_err(|source| ConfigError::Input { source })?;
+
+        let trimmed = input.trim().to_owned();
+
+        if trimmed.is_empty() {
+            return Ok(None); // Keep current
+        }
+
+        if matches!(trimmed.to_ascii_lowercase().as_str(), "q" | "quit" | "cancel") {
+            return Err(ConfigError::Cancelled);
+        }
+
+        return Ok(Some(trimmed));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Raw-mode menu key reader
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy)]
+enum MenuKey {
+    Up,
+    Down,
+    Select,
+    Exit,
+    MoveToExit,
+}
+
+fn read_menu_key() -> Result<MenuKey, ConfigError> {
+    loop {
+        let event = event::read().map_err(|source| ConfigError::Input { source })?;
+
+        let Event::Key(key) = event else {
+            continue;
+        };
+
+        if !is_key_press(key) {
+            continue;
+        }
+
+        match key.code {
+            KeyCode::Up | KeyCode::Char('w') => return Ok(MenuKey::Up),
+            KeyCode::Down | KeyCode::Char('s') => return Ok(MenuKey::Down),
+            KeyCode::Right | KeyCode::Char('e') | KeyCode::Char('l') => {
+                return Ok(MenuKey::MoveToExit);
+            }
+            KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('r') => {
+                return Ok(MenuKey::Select);
+            }
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('c')
+                if key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                return Ok(MenuKey::Exit);
+            }
+            _ => {}
+        }
+    }
 }
 
 fn prompt_for_llm_values(
@@ -672,6 +1004,10 @@ fn default_shell() -> String {
     } else {
         "sh".to_owned()
     }
+}
+
+fn default_codex_api_url() -> String {
+    "https://api.openai.com/v1/chat/completions".to_owned()
 }
 
 fn load_dotenv_values(path: Option<&Path>) -> Result<DotenvValues, ConfigError> {
@@ -1076,6 +1412,7 @@ LLM_MODEL=dotenv-model
                 api_key: Some("secret-key".to_owned()),
                 model: Some("test-model".to_owned()),
             },
+            None,
         )
         .expect("save llm values");
 

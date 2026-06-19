@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    config::ResolvedConfig,
+    codex_oauth,
+    config::{ProviderMode, ResolvedConfig},
     context,
     prompt::{self, PromptContext},
     types::{CommandOptions, OptionsValidationError},
@@ -182,17 +183,39 @@ fn build_chat_request(config: &ResolvedConfig, request: &str, files: &[PathBuf])
     }
 }
 
+fn resolve_bearer_token(config: &ResolvedConfig) -> Result<String, LlmError> {
+    if config.provider_mode == ProviderMode::CodexOAuth {
+        let store_path = codex_oauth::default_store_path().map_err(|e| {
+            LlmError::ApiStatus {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: format!("Codex OAuth: {e}"),
+            }
+        })?;
+        let token = codex_oauth::get_access_token(&store_path).map_err(|e| {
+            LlmError::ApiStatus {
+                status: StatusCode::UNAUTHORIZED,
+                message: format!("Codex OAuth: {e}"),
+            }
+        })?;
+        return Ok(token);
+    }
+
+    Ok(config.api_key.clone())
+}
+
 fn send_chat_request(
     client: &Client,
     config: &ResolvedConfig,
     request: &ChatRequest,
 ) -> Result<String, LlmError> {
-    let response = client
-        .post(&config.api_url)
-        .bearer_auth(&config.api_key)
-        .json(request)
-        .send()
-        .map_err(|source| request_error(source, config.request_timeout_seconds))?;
+    let bearer_token = resolve_bearer_token(config)?;
+
+    let mut req = client.post(&config.api_url).bearer_auth(bearer_token);
+
+    // Only send JSON body for non-HEAD/non-GET requests
+    req = req.json(request);
+
+    let response = req.send().map_err(|source| request_error(source, config.request_timeout_seconds))?;
 
     let status = response.status();
     let body = response
@@ -391,6 +414,7 @@ mod tests {
 
     fn config() -> ResolvedConfig {
         ResolvedConfig {
+            provider_mode: crate::config::ProviderMode::OpenAiCompatible,
             api_url: "https://example.test/v1/chat/completions".to_owned(),
             api_key: "test-key".to_owned(),
             model: "test-model".to_owned(),
