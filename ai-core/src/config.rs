@@ -7,10 +7,10 @@ use std::{
 };
 
 use crossterm::{
-    cursor,
+    QueueableCommand, cursor,
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
-    style::{Stylize, SetBackgroundColor, ResetColor},
-    terminal, QueueableCommand,
+    style::{ResetColor, SetBackgroundColor, Stylize},
+    terminal,
 };
 use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
@@ -432,17 +432,13 @@ pub(crate) fn configure_interactive(mode: ConfigEditMode) -> Result<ResolvedConf
             eprintln!();
 
             let values = prompt_for_llm_values(&updated, mode)?;
-            save_llm_config_values(
-                &path,
-                values,
-                Some(ProviderMode::OpenAiCompatible),
-            )?;
+            save_llm_config_values(&path, values, Some(ProviderMode::OpenAiCompatible))?;
 
             eprintln!("Saved config to {}", path.display());
         }
         ProviderMenuChoice::CodexOAuth => {
-            let store_path = codex_oauth::default_store_path()
-                .map_err(|_| ConfigError::ConfigDirUnavailable)?;
+            let store_path =
+                codex_oauth::default_store_path().map_err(|_| ConfigError::ConfigDirUnavailable)?;
             let status = codex_oauth::get_status(&store_path);
 
             if status.logged_in {
@@ -452,7 +448,12 @@ pub(crate) fn configure_interactive(mode: ConfigEditMode) -> Result<ResolvedConf
 
                 if status.is_expired {
                     eprintln!("Token is expired or near expiry. Re-authenticating...");
-                    match codex_oauth::run_browser_login(&store_path, true) {
+                    match codex_oauth::run_browser_login(
+                        &store_path,
+                        true,
+                        &(),
+                        &std::sync::atomic::AtomicBool::new(false),
+                    ) {
                         Ok(_) => eprintln!("Re-authentication successful!"),
                         Err(e) => {
                             eprintln!("Warning: could not re-authenticate: {e}");
@@ -463,7 +464,12 @@ pub(crate) fn configure_interactive(mode: ConfigEditMode) -> Result<ResolvedConf
                     let action = prompt_reauth_or_continue()?;
                     if action {
                         eprintln!();
-                        match codex_oauth::run_browser_login(&store_path, true) {
+                        match codex_oauth::run_browser_login(
+                            &store_path,
+                            true,
+                            &(),
+                            &std::sync::atomic::AtomicBool::new(false),
+                        ) {
                             Ok(_) => eprintln!("Re-authentication successful!"),
                             Err(e) => {
                                 eprintln!("Warning: re-authentication failed: {e}");
@@ -474,7 +480,12 @@ pub(crate) fn configure_interactive(mode: ConfigEditMode) -> Result<ResolvedConf
                 }
             } else {
                 eprintln!("Signing in to Codex...");
-                match codex_oauth::run_browser_login(&store_path, true) {
+                match codex_oauth::run_browser_login(
+                    &store_path,
+                    true,
+                    &(),
+                    &std::sync::atomic::AtomicBool::new(false),
+                ) {
                     Ok(_) => eprintln!("Sign-in successful!"),
                     Err(e) => {
                         eprintln!("Sign-in failed: {e}");
@@ -630,7 +641,10 @@ fn save_llm_config_values(
 // ---------------------------------------------------------------------------
 
 fn select_provider_menu(current: ProviderMode) -> Result<ProviderMenuChoice, ConfigError> {
-    let options = [ProviderMenuChoice::OpenAiApiKey, ProviderMenuChoice::CodexOAuth];
+    let options = [
+        ProviderMenuChoice::OpenAiApiKey,
+        ProviderMenuChoice::CodexOAuth,
+    ];
     const EXIT_INDEX: usize = 2;
 
     let _raw = RawModeGuard::enter()?;
@@ -674,13 +688,19 @@ fn select_provider_menu(current: ProviderMode) -> Result<ProviderMenuChoice, Con
 
 fn render_provider_menu(selected: usize, active_provider: ProviderMode) {
     let options = [
-        (ProviderMenuChoice::OpenAiApiKey, ProviderMode::OpenAiCompatible.label()),
-        (ProviderMenuChoice::CodexOAuth, ProviderMode::CodexOAuth.label()),
+        (
+            ProviderMenuChoice::OpenAiApiKey,
+            ProviderMode::OpenAiCompatible.label(),
+        ),
+        (
+            ProviderMenuChoice::CodexOAuth,
+            ProviderMode::CodexOAuth.label(),
+        ),
     ];
 
     let mut stderr = io::stderr();
-let _ = stderr.queue(terminal::Clear(terminal::ClearType::All));
-let _ = stderr.queue(cursor::MoveTo(0, 0));
+    let _ = stderr.queue(terminal::Clear(terminal::ClearType::All));
+    let _ = stderr.queue(cursor::MoveTo(0, 0));
 
     let _ = writeln!(stderr, "Select an AI provider:");
     let _ = writeln!(stderr);
@@ -689,8 +709,10 @@ let _ = stderr.queue(cursor::MoveTo(0, 0));
         let is_selected = i == selected;
         let is_active = matches!(
             (choice, active_provider),
-            (ProviderMenuChoice::OpenAiApiKey, ProviderMode::OpenAiCompatible)
-                | (ProviderMenuChoice::CodexOAuth, ProviderMode::CodexOAuth)
+            (
+                ProviderMenuChoice::OpenAiApiKey,
+                ProviderMode::OpenAiCompatible
+            ) | (ProviderMenuChoice::CodexOAuth, ProviderMode::CodexOAuth)
         );
 
         // Highlight the selected line with a background color
@@ -735,7 +757,9 @@ let _ = stderr.queue(cursor::MoveTo(0, 0));
 fn prompt_reauth_or_continue() -> Result<bool, ConfigError> {
     loop {
         eprint!("Re-authenticate? [y/N]: ");
-        io::stderr().flush().map_err(|source| ConfigError::Input { source })?;
+        io::stderr()
+            .flush()
+            .map_err(|source| ConfigError::Input { source })?;
 
         let mut input = String::new();
         io::stdin()
@@ -759,7 +783,9 @@ fn prompt_single_value(label: &str, current: Option<&str>) -> Result<Option<Stri
             Some(value) => eprint!("{label} [{value}]: "),
             None => eprint!("{label}: "),
         }
-        io::stderr().flush().map_err(|source| ConfigError::Input { source })?;
+        io::stderr()
+            .flush()
+            .map_err(|source| ConfigError::Input { source })?;
 
         let mut input = String::new();
         io::stdin()
@@ -772,7 +798,10 @@ fn prompt_single_value(label: &str, current: Option<&str>) -> Result<Option<Stri
             return Ok(None); // Keep current
         }
 
-        if matches!(trimmed.to_ascii_lowercase().as_str(), "q" | "quit" | "cancel") {
+        if matches!(
+            trimmed.to_ascii_lowercase().as_str(),
+            "q" | "quit" | "cancel"
+        ) {
             return Err(ConfigError::Cancelled);
         }
 

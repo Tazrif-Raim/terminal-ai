@@ -14,7 +14,7 @@ use std::{
 
 use directories::BaseDirs;
 use rand::Rng;
-use reqwest::blocking::Client;
+use reqwest::blocking::{Client, Response};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -25,8 +25,13 @@ use sha2::{Digest, Sha256};
 const CHATGPT_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const CHATGPT_AUTHORIZE_URL: &str = "https://auth.openai.com/oauth/authorize";
 const CHATGPT_TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
+pub(crate) const CHATGPT_CODEX_RESPONSES_URL: &str =
+    "https://chatgpt.com/backend-api/codex/responses";
+pub(crate) const CHATGPT_ACCOUNT_ID_HEADER: &str = "ChatGPT-Account-Id";
+pub(crate) const ORIGINATOR_HEADER: &str = "originator";
+pub(crate) const ORIGINATOR_VALUE: &str = "terminal-ai";
 const REDIRECT_HOST: &str = "localhost";
-const REDIRECT_PORT: u16 = 34123;
+const REDIRECT_PORT: u16 = 1455;
 const REDIRECT_PATH: &str = "/auth/callback";
 const DEFAULT_SCOPE: &str = "openid profile email offline_access";
 const OAUTH_TIMEOUT: Duration = Duration::from_secs(300);
@@ -73,17 +78,17 @@ impl CodexToken {
         let access_token = payload
             .get("access_token")
             .and_then(|v| v.as_str())
-            .ok_or(CodexOAuthError::TokenExchange(
-                "OAuth response missing access_token".to_owned(),
-            ))?;
+            .ok_or_else(|| {
+                CodexOAuthError::TokenExchange("OAuth response missing access_token".to_owned())
+            })?;
 
         let refresh_token = payload
             .get("refresh_token")
             .and_then(|v| v.as_str())
             .or(fallback_refresh)
-            .ok_or(CodexOAuthError::TokenExchange(
-                "OAuth response missing refresh_token".to_owned(),
-            ))?;
+            .ok_or_else(|| {
+                CodexOAuthError::TokenExchange("OAuth response missing refresh_token".to_owned())
+            })?;
 
         let expires_in = payload
             .get("expires_in")
@@ -189,7 +194,10 @@ pub(crate) fn default_store_path() -> Result<PathBuf, CodexOAuthError> {
     Ok(config_dir.join("codex-auth.json"))
 }
 
-/// Return the current ChatGPT OAuth sign-in state (passive inspect, no refresh).
+/// Return the current ChatGPT OAuth sign‑in state (passive inspect, no refresh).
+///
+/// The function never attempts a token refresh; it only reads the on‑disk JSON file.
+/// Errors are reported via `unreadable_reason` so callers can surface a helpful UI message.
 pub(crate) fn get_status(store_path: &Path) -> CodexAuthStatus {
     let content = match std::fs::read_to_string(store_path) {
         Ok(c) => c,
@@ -239,28 +247,26 @@ pub(crate) fn get_status(store_path: &Path) -> CodexAuthStatus {
     }
 }
 
-/// Return the current access token, refreshing if necessary.
-pub(crate) fn get_access_token(store_path: &Path) -> Result<String, CodexOAuthError> {
+/// Return the current token bundle, refreshing if necessary.
+pub(crate) fn get_token(store_path: &Path) -> Result<CodexToken, CodexOAuthError> {
     let token = load_token(store_path)?;
 
     if !token.is_expired() {
-        return Ok(token.access_token);
+        return Ok(token);
     }
 
-    // Try to refresh
-    let refreshed = refresh_token_inner(store_path, &token)?;
-    Ok(refreshed.access_token)
+    refresh_token_inner(store_path, &token)
 }
 
 /// Whether a ChatGPT OAuth token is stored on disk.
-    #[allow(dead_code)]
-    pub(crate) fn is_logged_in(store_path: &Path) -> bool {
+#[allow(dead_code)]
+pub(crate) fn is_logged_in(store_path: &Path) -> bool {
     get_status(store_path).logged_in
 }
 
 /// Delete the stored ChatGPT OAuth token.
-    #[allow(dead_code)]
-    pub(crate) fn logout(store_path: &Path) -> bool {
+#[allow(dead_code)]
+pub(crate) fn logout(store_path: &Path) -> bool {
     if !store_path.exists() {
         return false;
     }
@@ -271,10 +277,30 @@ pub(crate) fn get_access_token(store_path: &Path) -> Result<String, CodexOAuthEr
 // Browser login flow
 // ---------------------------------------------------------------------------
 
-/// Run the ChatGPT OAuth authorization code flow with PKCE.
+/// UI hook for displaying the authorize URL.
+pub trait CodexLoginInteraction {
+    /// Called once the authorize URL is ready. `opened_in_browser` indicates whether the
+    /// implementation attempted to launch a browser automatically.
+    fn show_authorize_url(&self, url: &str, opened_in_browser: bool);
+}
+
+// Default implementation that prints to stderr (fallback for non‑UI callers).
+impl CodexLoginInteraction for () {
+    fn show_authorize_url(&self, url: &str, opened_in_browser: bool) {
+        if opened_in_browser {
+            eprintln!("Browser opened to: {url}");
+        } else {
+            eprintln!("Open this URL in a browser: {url}");
+        }
+    }
+}
+
+// Run the ChatGPT OAuth authorization code flow with PKCE.
 pub(crate) fn run_browser_login(
     store_path: &Path,
     open_browser: bool,
+    interaction: &dyn CodexLoginInteraction,
+    cancel_event: &std::sync::atomic::AtomicBool,
 ) -> Result<CodexAuthStatus, CodexOAuthError> {
     let redirect_uri = format!("http://{REDIRECT_HOST}:{REDIRECT_PORT}{REDIRECT_PATH}");
 
@@ -282,21 +308,20 @@ pub(crate) fn run_browser_login(
     let state = generate_state();
     let authorize_url = build_authorize_url(&redirect_uri, &state, &challenge);
 
-    eprintln!();
-    eprintln!("ChatGPT sign-in: open the following URL in a browser:");
-    eprintln!("  {authorize_url}");
-    eprintln!();
+    // Show URL via UI hook before attempting to open the browser.
+    interaction.show_authorize_url(&authorize_url, false);
 
     if open_browser {
-        if let Err(e) = webbrowser::open(&authorize_url) {
-            eprintln!("(could not launch browser: {e}; copy the URL above manually)");
-        } else {
-            eprintln!("A browser window should open shortly...");
+        match webbrowser::open(&authorize_url) {
+            Ok(_) => interaction.show_authorize_url(&authorize_url, true),
+            Err(e) => {
+                eprintln!("(could not launch browser: {e}; copy the URL above manually)");
+            }
         }
     }
 
-    // Wait for OAuth callback
-    let callback_result = wait_for_oauth_callback()?;
+    // Wait for OAuth callback, cancel‑aware.
+    let callback_result = wait_for_oauth_callback(cancel_event)?;
 
     // Validate state (CSRF check)
     match callback_result.get("state") {
@@ -324,7 +349,7 @@ pub(crate) fn run_browser_login(
     let payload = exchange_code(&redirect_uri, code, &verifier)?;
     let token = CodexToken::from_response(&payload, None)?;
 
-    // Save token
+    // Save token securely (atomic write, 0o600 perms on Unix).
     save_token(store_path, &token)?;
 
     Ok(get_status(store_path))
@@ -360,51 +385,63 @@ fn base64_url_encode(data: &[u8]) -> String {
     base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(data)
 }
 
+// ---------------------------------------------------------------------------
+// URL helpers – now using the `url` crate for robust encoding/decoding.
+// ---------------------------------------------------------------------------
+
 fn build_authorize_url(redirect_uri: &str, state: &str, code_challenge: &str) -> String {
-    let params = [
-        ("client_id", CHATGPT_CLIENT_ID),
-        ("response_type", "code"),
-        ("redirect_uri", redirect_uri),
-        ("scope", DEFAULT_SCOPE),
-        ("code_challenge", code_challenge),
-        ("code_challenge_method", "S256"),
-        ("state", state),
-    ];
-
-    let query: String = params
-        .iter()
-        .map(|(k, v)| {
-            let encoded_key = urlencode(k);
-            let encoded_value = urlencode(v);
-            format!("{encoded_key}={encoded_value}")
-        })
-        .collect::<Vec<_>>()
-        .join("&");
-
+    use url::form_urlencoded;
+    let query = form_urlencoded::Serializer::new(String::new())
+        .append_pair("client_id", CHATGPT_CLIENT_ID)
+        .append_pair("response_type", "code")
+        .append_pair("redirect_uri", redirect_uri)
+        .append_pair("scope", DEFAULT_SCOPE)
+        .append_pair("code_challenge", code_challenge)
+        .append_pair("code_challenge_method", "S256")
+        .append_pair("state", state)
+        .finish();
     format!("{CHATGPT_AUTHORIZE_URL}?{query}")
 }
 
-fn urlencode(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    for byte in input.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                result.push(byte as char);
+fn urldecode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+
+    while index < bytes.len() {
+        match bytes[index] {
+            b'+' => {
+                decoded.push(b' ');
+                index += 1;
             }
-            b' ' => result.push_str("%20"),
-            _ => {
-                result.push_str(&format!("%{byte:02X}"));
+            b'%' if index + 2 < bytes.len() => {
+                let hi = (bytes[index + 1] as char).to_digit(16);
+                let lo = (bytes[index + 2] as char).to_digit(16);
+                if let (Some(hi), Some(lo)) = (hi, lo) {
+                    decoded.push(((hi << 4) | lo) as u8);
+                    index += 3;
+                } else {
+                    decoded.push(bytes[index]);
+                    index += 1;
+                }
+            }
+            byte => {
+                decoded.push(byte);
+                index += 1;
             }
         }
     }
-    result
+
+    String::from_utf8_lossy(&decoded).into_owned()
 }
 
 // ---------------------------------------------------------------------------
 // OAuth callback HTTP server
 // ---------------------------------------------------------------------------
 
-fn wait_for_oauth_callback() -> Result<std::collections::HashMap<String, String>, CodexOAuthError> {
+fn wait_for_oauth_callback(
+    cancel_event: &std::sync::atomic::AtomicBool,
+) -> Result<std::collections::HashMap<String, String>, CodexOAuthError> {
     let listener = TcpListener::bind((REDIRECT_HOST, REDIRECT_PORT))
         .map_err(|e| CodexOAuthError::ServerBind(format!("{e}")))?;
 
@@ -415,9 +452,14 @@ fn wait_for_oauth_callback() -> Result<std::collections::HashMap<String, String>
     let deadline = Instant::now() + OAUTH_TIMEOUT;
 
     while Instant::now() < deadline {
+        if cancel_event.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(CodexOAuthError::LoginCancelled);
+        }
         match listener.accept() {
             Ok((stream, _)) => {
-                return handle_callback_request(stream);
+                if let Some(params) = handle_callback_request(stream)? {
+                    return Ok(params);
+                }
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(POLL_INTERVAL);
@@ -432,7 +474,7 @@ fn wait_for_oauth_callback() -> Result<std::collections::HashMap<String, String>
 
 fn handle_callback_request(
     mut stream: TcpStream,
-) -> Result<std::collections::HashMap<String, String>, CodexOAuthError> {
+) -> Result<Option<std::collections::HashMap<String, String>>, CodexOAuthError> {
     let reader = BufReader::new(&stream);
     let request_line = reader
         .lines()
@@ -446,28 +488,36 @@ fn handle_callback_request(
         return Err(CodexOAuthError::Parse("malformed request line".to_owned()));
     }
 
-    let path = parts[1];
-    let query_start = path.find('?').map(|i| i + 1);
+    let target = parts[1];
+    let (path, query_string) = target
+        .split_once('?')
+        .map_or((target, ""), |(path, query)| (path, query));
+
+    if path != REDIRECT_PATH {
+        let body = oauth_error_html(
+            "ChatGPT sign-in failed",
+            "Unexpected OAuth callback path. Return to your terminal and try again.",
+        );
+        let response = format!(
+            "HTTP/1.1 404 Not Found\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+        return Ok(None);
+    }
 
     let mut params = std::collections::HashMap::new();
-    if let Some(start) = query_start {
-        let query_string = &path[start..];
-        for pair in query_string.split('&') {
-            if let Some(eq_pos) = pair.find('=') {
-                let key = urldecode(&pair[..eq_pos]);
-                let value = urldecode(&pair[eq_pos + 1..]);
-                params.insert(key, value);
-            }
-        }
+    for pair in query_string.split('&').filter(|pair| !pair.is_empty()) {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        params.insert(urldecode(key), urldecode(value));
     }
 
     // Send response
     let has_error = params.contains_key("error");
     let (status_line, body) = if has_error {
-        let description = params
-            .get("error_description")
-            .cloned()
-            .unwrap_or_default();
+        let description = params.get("error_description").cloned().unwrap_or_default();
         (
             "HTTP/1.1 200 OK\r\n",
             oauth_error_html("ChatGPT sign-in failed", &description),
@@ -491,25 +541,7 @@ fn handle_callback_request(
     let _ = stream.write_all(response.as_bytes());
     let _ = stream.flush();
 
-    Ok(params)
-}
-
-fn urldecode(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    let mut chars = input.chars();
-    while let Some(c) = chars.next() {
-        if c == '%' {
-            let hex: String = chars.by_ref().take(2).collect();
-            if let Ok(byte) = u8::from_str_radix(&hex, 16) {
-                result.push(byte as char);
-            }
-        } else if c == '+' {
-            result.push(' ');
-        } else {
-            result.push(c);
-        }
-    }
-    result
+    Ok(Some(params))
 }
 
 // ---------------------------------------------------------------------------
@@ -540,30 +572,17 @@ fn exchange_code(
         .send()
         .map_err(|e| CodexOAuthError::Http(e.to_string()))?;
 
-    let status = response.status();
-    let body: serde_json::Value = response
-        .json()
-        .map_err(|e| CodexOAuthError::Parse(format!("failed to parse token response: {e}")))?;
-
-    if !status.is_success() {
-        let error_msg = body
-            .get("error_description")
-            .and_then(|v| v.as_str())
-            .or_else(|| body.get("error").and_then(|v| v.as_str()))
-            .unwrap_or("unknown error");
-        return Err(CodexOAuthError::TokenExchange(format!(
-            "HTTP {status}: {error_msg}"
-        )));
-    }
-
-    Ok(body)
+    parse_token_response(response, "token response").map_err(CodexOAuthError::TokenExchange)
 }
 
 // ---------------------------------------------------------------------------
 // Token refresh
 // ---------------------------------------------------------------------------
 
-fn refresh_token_inner(store_path: &Path, token: &CodexToken) -> Result<CodexToken, CodexOAuthError> {
+fn refresh_token_inner(
+    store_path: &Path,
+    token: &CodexToken,
+) -> Result<CodexToken, CodexOAuthError> {
     let client = Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -581,33 +600,64 @@ fn refresh_token_inner(store_path: &Path, token: &CodexToken) -> Result<CodexTok
         .send()
         .map_err(|e| CodexOAuthError::Http(e.to_string()))?;
 
-    let status = response.status();
-    let body: serde_json::Value = response
-        .json()
-        .map_err(|e| CodexOAuthError::Parse(format!("failed to parse refresh response: {e}")))?;
-
-    if !status.is_success() {
-        let error_msg = body
-            .get("error_description")
-            .and_then(|v| v.as_str())
-            .or_else(|| body.get("error").and_then(|v| v.as_str()))
-            .unwrap_or("unknown error");
-
-        if error_msg.contains("invalid_grant") {
+    let body = match parse_token_response(response, "refresh response") {
+        Ok(body) => body,
+        Err(message) if message.contains("invalid_grant") => {
             return Err(CodexOAuthError::TokenRefresh(
                 "ChatGPT session expired. Run `ai --config` and select Codex OAuth to sign in again."
                     .to_owned(),
             ));
         }
-
-        return Err(CodexOAuthError::TokenRefresh(format!(
-            "HTTP {status}: {error_msg}"
-        )));
-    }
+        Err(message) => return Err(CodexOAuthError::TokenRefresh(message)),
+    };
 
     let new_token = CodexToken::from_response(&body, Some(&token.refresh_token))?;
     save_token(store_path, &new_token)?;
     Ok(new_token)
+}
+
+fn parse_token_response(
+    response: Response,
+    context: &'static str,
+) -> Result<serde_json::Value, String> {
+    let status = response.status();
+    let body = response
+        .text()
+        .map_err(|e| format!("failed to read {context}: {e}"))?;
+    let parsed: serde_json::Value = serde_json::from_str(&body)
+        .map_err(|e| format!("failed to parse {context}: {e}; body: {}", trim_body(&body)))?;
+
+    if status.is_success() {
+        return Ok(parsed);
+    }
+
+    let error = parsed
+        .get("error")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown error");
+    let description = parsed
+        .get("error_description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let detail = if description.is_empty() {
+        error.to_owned()
+    } else {
+        format!("{error}: {description}")
+    };
+
+    Err(format!("HTTP {status}: {detail}"))
+}
+
+fn trim_body(body: &str) -> String {
+    const MAX_LEN: usize = 500;
+    let body = body.trim();
+    if body.chars().count() <= MAX_LEN {
+        return body.to_owned();
+    }
+
+    let mut truncated: String = body.chars().take(MAX_LEN).collect();
+    truncated.push_str("...");
+    truncated
 }
 
 // ---------------------------------------------------------------------------
@@ -615,33 +665,43 @@ fn refresh_token_inner(store_path: &Path, token: &CodexToken) -> Result<CodexTok
 // ---------------------------------------------------------------------------
 
 fn load_token(store_path: &Path) -> Result<CodexToken, CodexOAuthError> {
-    let content =
-        std::fs::read_to_string(store_path).map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => CodexOAuthError::NoToken,
-            _ => CodexOAuthError::Io(e),
-        })?;
+    let content = std::fs::read_to_string(store_path).map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => CodexOAuthError::NoToken,
+        _ => CodexOAuthError::Io(e),
+    })?;
 
     serde_json::from_str(&content).map_err(|e| CodexOAuthError::Parse(e.to_string()))
 }
 
 fn save_token(store_path: &Path, token: &CodexToken) -> Result<(), CodexOAuthError> {
+    use std::fs::{self, OpenOptions};
+    use std::io::Write;
+
     if let Some(parent) = store_path.parent() {
-        std::fs::create_dir_all(parent).map_err(CodexOAuthError::Io)?;
+        fs::create_dir_all(parent).map_err(CodexOAuthError::Io)?;
     }
 
-    let content = serde_json::to_string_pretty(token)
-        .map_err(|e| CodexOAuthError::Parse(e.to_string()))?;
+    let json =
+        serde_json::to_string_pretty(token).map_err(|e| CodexOAuthError::Parse(e.to_string()))?;
+    let tmp_path = store_path.with_extension("tmp");
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&tmp_path)
+        .map_err(CodexOAuthError::Io)?;
+    file.write_all(json.as_bytes())
+        .map_err(CodexOAuthError::Io)?;
+    file.flush().map_err(CodexOAuthError::Io)?;
 
-    std::fs::write(store_path, format!("{content}\n")).map_err(CodexOAuthError::Io)?;
-
-    // Best-effort chmod 0600 on Unix
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(store_path, std::fs::Permissions::from_mode(0o600));
+        std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o600))
+            .map_err(CodexOAuthError::Io)?;
     }
 
-    Ok(())
+    fs::rename(&tmp_path, store_path).map_err(CodexOAuthError::Io)
 }
 
 // ---------------------------------------------------------------------------
@@ -738,4 +798,86 @@ p{{font-size:15px;line-height:1.5;margin:0;color:#57606a}}
 </main>
 </body></html>"#,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{extract_chatgpt_claims, trim_body, urldecode, CodexToken};
+    use serde_json::json;
+
+    #[test]
+    fn token_response_uses_refresh_fallback_and_claims() {
+        let payload = json!({
+            "access_token": "access-token",
+            "expires_in": 3600,
+            "id_token": jwt_with_chatgpt_claims("acct_123", "plus", "user_456"),
+        });
+
+        let token = CodexToken::from_response(&payload, Some("refresh-token"))
+            .expect("token from response");
+
+        assert_eq!(token.access_token, "access-token");
+        assert_eq!(token.refresh_token, "refresh-token");
+        assert_eq!(token.account_id.as_deref(), Some("acct_123"));
+        assert_eq!(token.plan_type.as_deref(), Some("plus"));
+        assert_eq!(token.user_id.as_deref(), Some("user_456"));
+        assert!(!token.is_expired());
+    }
+
+    #[test]
+    fn token_response_rejects_missing_refresh_without_fallback() {
+        let payload = json!({
+            "access_token": "access-token",
+            "expires_in": 3600,
+        });
+
+        let error = CodexToken::from_response(&payload, None).expect_err("missing refresh token");
+
+        assert!(error.to_string().contains("refresh_token"));
+    }
+
+    #[test]
+    fn extracts_chatgpt_claims_from_id_token() {
+        let id_token = jwt_with_chatgpt_claims("acct_abc", "pro", "user_def");
+
+        let (account_id, plan_type, user_id) = extract_chatgpt_claims(&id_token);
+
+        assert_eq!(account_id.as_deref(), Some("acct_abc"));
+        assert_eq!(plan_type.as_deref(), Some("pro"));
+        assert_eq!(user_id.as_deref(), Some("user_def"));
+    }
+
+    #[test]
+    fn decodes_callback_query_components() {
+        assert_eq!(urldecode("hello+world%21"), "hello world!");
+        assert_eq!(urldecode("a%2Fb%3Fc%3Dd"), "a/b?c=d");
+    }
+
+    #[test]
+    fn trims_long_error_bodies() {
+        let body = "x".repeat(600);
+
+        let trimmed = trim_body(&body);
+
+        assert_eq!(trimmed.chars().count(), 503);
+        assert!(trimmed.ends_with("..."));
+    }
+
+    fn jwt_with_chatgpt_claims(account_id: &str, plan_type: &str, user_id: &str) -> String {
+        use base64::Engine;
+
+        let header = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode("{}");
+        let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+            json!({
+                "https://api.openai.com/auth": {
+                    "chatgpt_account_id": account_id,
+                    "chatgpt_plan_type": plan_type,
+                    "chatgpt_user_id": user_id,
+                }
+            })
+            .to_string(),
+        );
+
+        format!("{header}.{payload}.signature")
+    }
 }

@@ -1,8 +1,13 @@
-use std::{fmt, path::PathBuf, time::Duration};
+use std::{
+    fmt,
+    io::{BufRead, BufReader},
+    path::PathBuf,
+    time::Duration,
+};
 
 use reqwest::{StatusCode, blocking::Client};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::{
     codex_oauth,
@@ -13,6 +18,8 @@ use crate::{
 };
 
 const TEMPERATURE: f32 = 0.1;
+const DEFAULT_CODEX_INSTRUCTIONS: &str =
+    "You are ChatGPT, a large language model trained by OpenAI.";
 #[derive(Debug)]
 pub(crate) enum LlmError {
     ClientBuild(reqwest::Error),
@@ -20,6 +27,7 @@ pub(crate) enum LlmError {
     Timeout { seconds: u64 },
     ApiStatus { status: StatusCode, message: String },
     ApiResponse(serde_json::Error),
+    StreamRead(std::io::Error),
     EmptyMessage,
     ResponseParse(serde_json::Error),
     InvalidOptions(OptionsValidationError),
@@ -34,6 +42,21 @@ struct ChatRequest {
 
 #[derive(Debug, Serialize)]
 struct ChatMessage {
+    role: &'static str,
+    content: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexResponsesRequest {
+    model: String,
+    instructions: String,
+    input: Vec<CodexInputMessage>,
+    store: bool,
+    stream: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexInputMessage {
     role: &'static str,
     content: String,
 }
@@ -76,6 +99,12 @@ impl fmt::Display for LlmError {
                 write!(
                     formatter,
                     "error: LLM API response was not valid JSON: {source}"
+                )
+            }
+            Self::StreamRead(source) => {
+                write!(
+                    formatter,
+                    "error: could not read streamed LLM response: {source}"
                 )
             }
             Self::EmptyMessage => write!(formatter, "error: LLM response did not include content"),
@@ -183,39 +212,23 @@ fn build_chat_request(config: &ResolvedConfig, request: &str, files: &[PathBuf])
     }
 }
 
-fn resolve_bearer_token(config: &ResolvedConfig) -> Result<String, LlmError> {
-    if config.provider_mode == ProviderMode::CodexOAuth {
-        let store_path = codex_oauth::default_store_path().map_err(|e| {
-            LlmError::ApiStatus {
-                status: StatusCode::INTERNAL_SERVER_ERROR,
-                message: format!("Codex OAuth: {e}"),
-            }
-        })?;
-        let token = codex_oauth::get_access_token(&store_path).map_err(|e| {
-            LlmError::ApiStatus {
-                status: StatusCode::UNAUTHORIZED,
-                message: format!("Codex OAuth: {e}"),
-            }
-        })?;
-        return Ok(token);
-    }
-
-    Ok(config.api_key.clone())
-}
-
 fn send_chat_request(
     client: &Client,
     config: &ResolvedConfig,
     request: &ChatRequest,
 ) -> Result<String, LlmError> {
-    let bearer_token = resolve_bearer_token(config)?;
+    if config.provider_mode == ProviderMode::CodexOAuth {
+        return send_codex_responses_request(client, config, request);
+    }
 
-    let mut req = client.post(&config.api_url).bearer_auth(bearer_token);
+    let mut req = client.post(&config.api_url).bearer_auth(&config.api_key);
 
     // Only send JSON body for non-HEAD/non-GET requests
     req = req.json(request);
 
-    let response = req.send().map_err(|source| request_error(source, config.request_timeout_seconds))?;
+    let response = req
+        .send()
+        .map_err(|source| request_error(source, config.request_timeout_seconds))?;
 
     let status = response.status();
     let body = response
@@ -231,6 +244,131 @@ fn send_chat_request(
 
     let response: ChatResponse = serde_json::from_str(&body).map_err(LlmError::ApiResponse)?;
     first_message_content(response)
+}
+
+fn send_codex_responses_request(
+    client: &Client,
+    config: &ResolvedConfig,
+    request: &ChatRequest,
+) -> Result<String, LlmError> {
+    let token = codex_oauth::default_store_path()
+        .map_err(|e| LlmError::ApiStatus {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: format!("Codex OAuth: {e}"),
+        })
+        .and_then(|store_path| {
+            codex_oauth::get_token(&store_path).map_err(|e| LlmError::ApiStatus {
+                status: StatusCode::UNAUTHORIZED,
+                message: format!("Codex OAuth: {e}"),
+            })
+        })?;
+    let codex_request = codex_responses_request(config, request);
+
+    let mut req = client
+        .post(codex_oauth::CHATGPT_CODEX_RESPONSES_URL)
+        .bearer_auth(&token.access_token)
+        .header(
+            codex_oauth::ORIGINATOR_HEADER,
+            codex_oauth::ORIGINATOR_VALUE,
+        )
+        .json(&codex_request);
+
+    if let Some(account_id) = token.account_id.as_deref() {
+        req = req.header(codex_oauth::CHATGPT_ACCOUNT_ID_HEADER, account_id);
+    }
+
+    let response = req
+        .send()
+        .map_err(|source| request_error(source, config.request_timeout_seconds))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response
+            .text()
+            .map_err(|source| request_error(source, config.request_timeout_seconds))?;
+        return Err(LlmError::ApiStatus {
+            status,
+            message: clean_api_error_message(&body),
+        });
+    }
+
+    parse_codex_stream(response)
+}
+
+fn codex_responses_request(
+    config: &ResolvedConfig,
+    request: &ChatRequest,
+) -> CodexResponsesRequest {
+    let mut instructions = Vec::new();
+    let mut input = Vec::new();
+
+    for message in &request.messages {
+        match message.role {
+            "system" | "developer" => instructions.push(message.content.as_str()),
+            "assistant" => input.push(CodexInputMessage {
+                role: "assistant",
+                content: message.content.clone(),
+            }),
+            _ => input.push(CodexInputMessage {
+                role: "user",
+                content: message.content.clone(),
+            }),
+        }
+    }
+
+    CodexResponsesRequest {
+        model: config.model.clone(),
+        instructions: if instructions.is_empty() {
+            DEFAULT_CODEX_INSTRUCTIONS.to_owned()
+        } else {
+            instructions.join("\n\n")
+        },
+        input,
+        store: false,
+        stream: true,
+    }
+}
+
+fn parse_codex_stream(response: reqwest::blocking::Response) -> Result<String, LlmError> {
+    let mut output = String::new();
+    let reader = BufReader::new(response);
+
+    for line in reader.lines() {
+        let line = line.map_err(LlmError::StreamRead)?;
+        let Some(data) = line.strip_prefix("data:") else {
+            continue;
+        };
+        let data = data.trim();
+        if data.is_empty() || data == "[DONE]" {
+            continue;
+        }
+        let value: Value = serde_json::from_str(data).map_err(LlmError::ApiResponse)?;
+        if let Some(error) = value.get("error") {
+            return Err(LlmError::ApiStatus {
+                status: StatusCode::BAD_GATEWAY,
+                message: clean_api_error_message(&json!({ "error": error }).to_string()),
+            });
+        }
+        if let Some(delta) = response_text_delta(&value) {
+            output.push_str(delta);
+        }
+    }
+
+    let output = output.trim().to_owned();
+    if output.is_empty() {
+        Err(LlmError::EmptyMessage)
+    } else {
+        Ok(output)
+    }
+}
+
+fn response_text_delta(value: &Value) -> Option<&str> {
+    let event_type = value.get("type").and_then(Value::as_str);
+    if event_type.is_some_and(|event_type| event_type.ends_with(".done")) {
+        return None;
+    }
+
+    value.get("delta").and_then(Value::as_str)
 }
 
 fn request_error(source: reqwest::Error, timeout_seconds: u64) -> LlmError {
