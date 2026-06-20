@@ -13,11 +13,12 @@ export function HeroSection() {
 
       {/* Subtitle */}
       <p className="mt-4 max-w-xl text-base text-nord-4 md:text-lg">
-        Natural language → Correct terminal command <span className="text-nord-8">Instantly.</span>
+        Natural language → Correct terminal command. <br />{" "}
+        <span className="text-nord-8">Instantly.</span>
       </p>
 
       {/* Feature badges */}
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-4 max-w-2xl">
+      <div className="mt-4 flex max-w-2xl flex-wrap items-center justify-center gap-4">
         <span className="inline-flex items-center gap-1.5 rounded-full border border-nord-2 bg-nord-1/60 px-3 py-1 font-mono text-xs text-nord-6">
           <Zap className="size-3.5" />
           Powered by OpenAI-compatible API
