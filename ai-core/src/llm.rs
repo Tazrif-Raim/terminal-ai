@@ -221,7 +221,7 @@ fn send_chat_request(
 
     let mut req = client.post(&config.api_url).bearer_auth(&config.api_key);
 
-    // Only send JSON body for non-HEAD/non-GET requests
+    // Send JSON body for the chat completion POST request
     req = req.json(request);
 
     let response = req
@@ -324,8 +324,12 @@ fn codex_responses_request(
 }
 
 fn parse_codex_stream(response: reqwest::blocking::Response) -> Result<String, LlmError> {
-    let mut output = String::new();
     let reader = BufReader::new(response);
+    parse_sse_events(reader)
+}
+
+fn parse_sse_events(reader: impl BufRead) -> Result<String, LlmError> {
+    let mut output = String::new();
 
     for line in reader.lines() {
         let line = line.map_err(LlmError::StreamRead)?;
@@ -449,9 +453,13 @@ fn clean_api_error_message(body: &str) -> String {
 mod tests {
     use super::{
         LlmError, build_chat_request, clean_api_error_message, extract_json,
-        generate_options_with_sender, parse_command_options,
+        generate_options_with_sender, parse_command_options, parse_sse_events,
+        response_text_delta,
     };
     use crate::{config::ResolvedConfig, types::Risk};
+    use reqwest::StatusCode;
+    use serde_json::json;
+    use std::io::Cursor;
 
     #[test]
     fn builds_openai_compatible_chat_request() {
@@ -542,6 +550,94 @@ mod tests {
 
         assert_eq!(calls, 1);
         assert!(matches!(error, LlmError::InvalidOptions(_)));
+    }
+
+    // --- parse_sse_events tests ---
+
+    #[test]
+    fn parse_sse_events_concatenates_deltas() {
+        let sse = Cursor::new(
+            b"data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello \"}\n\
+              data: {\"type\":\"response.output_text.delta\",\"delta\":\"World\"}\n\
+              data: [DONE]\n" as &[u8],
+        );
+        let result = parse_sse_events(sse).expect("should succeed");
+        assert_eq!(result, "Hello World");
+    }
+
+    #[test]
+    fn parse_sse_events_skips_non_data_lines() {
+        let sse = Cursor::new(
+            b": keep-alive comment\n\
+              \n\
+              data: {\"type\":\"response.output_text.delta\",\"delta\":\"text\"}\n" as &[u8],
+        );
+        let result = parse_sse_events(sse).expect("should succeed");
+        assert_eq!(result, "text");
+    }
+
+    #[test]
+    fn parse_sse_events_errors_on_error_payload() {
+        let sse = Cursor::new(b"data: {\"error\":{\"message\":\"model not found\"}}\n" as &[u8]);
+        let err = parse_sse_events(sse).expect_err("should error");
+
+        match &err {
+            LlmError::ApiStatus { status, message } => {
+                assert_eq!(*status, StatusCode::BAD_GATEWAY);
+                assert_eq!(message, "model not found");
+            }
+            other => panic!("expected ApiStatus, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_sse_events_errors_on_empty_stream() {
+        let sse = Cursor::new(b"data: [DONE]\n" as &[u8]);
+        let err = parse_sse_events(sse).expect_err("should error");
+        assert!(matches!(err, LlmError::EmptyMessage));
+    }
+
+    #[test]
+    fn parse_sse_events_errors_when_only_non_data_lines() {
+        let sse = Cursor::new(b": just a comment\n\n: another comment\n" as &[u8]);
+        let err = parse_sse_events(sse).expect_err("should error");
+        assert!(matches!(err, LlmError::EmptyMessage));
+    }
+
+    #[test]
+    fn parse_sse_events_ignores_empty_data() {
+        let sse = Cursor::new(
+            b"data: \n\
+              data: {\"type\":\"response.output_text.delta\",\"delta\":\"x\"}\n" as &[u8],
+        );
+        let result = parse_sse_events(sse).expect("should succeed");
+        assert_eq!(result, "x");
+    }
+
+    // --- response_text_delta tests ---
+
+    #[test]
+    fn response_text_delta_returns_some_for_ongoing_event() {
+        let value = json!({"type": "response.output_text.delta", "delta": "Hello"});
+        assert_eq!(response_text_delta(&value), Some("Hello"));
+    }
+
+    #[test]
+    fn response_text_delta_returns_none_for_done_event() {
+        let value = json!({"type": "response.output_text.done", "delta": "Hello"});
+        assert_eq!(response_text_delta(&value), None);
+    }
+
+    #[test]
+    fn response_text_delta_returns_none_when_no_delta_field() {
+        let value = json!({"type": "response.output_text.delta"});
+        assert_eq!(response_text_delta(&value), None);
+    }
+
+    #[test]
+    fn response_text_delta_returns_none_for_unknown_type() {
+        let value = json!({"type": "error", "delta": "something"});
+        assert_eq!(response_text_delta(&value), Some("something"));
     }
 
     fn config() -> ResolvedConfig {

@@ -843,9 +843,8 @@ fn read_menu_key() -> Result<MenuKey, ConfigError> {
             KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('r') => {
                 return Ok(MenuKey::Select);
             }
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('c')
-                if key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
+            KeyCode::Esc | KeyCode::Char('q') => return Ok(MenuKey::Exit),
+            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 return Ok(MenuKey::Exit);
             }
             _ => {}
