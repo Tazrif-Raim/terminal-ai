@@ -337,8 +337,11 @@ fn parse_sse_events(reader: impl BufRead) -> Result<String, LlmError> {
             continue;
         };
         let data = data.trim();
-        if data.is_empty() || data == "[DONE]" {
+        if data.is_empty() {
             continue;
+        }
+        if data == "[DONE]" {
+            break;
         }
         let value: Value = serde_json::from_str(data).map_err(LlmError::ApiResponse)?;
         if let Some(error) = value.get("error") {
@@ -635,7 +638,7 @@ mod tests {
     }
 
     #[test]
-    fn response_text_delta_returns_none_for_unknown_type() {
+    fn response_text_delta_returns_some_for_unknown_type() {
         let value = json!({"type": "error", "delta": "something"});
         assert_eq!(response_text_delta(&value), Some("something"));
     }

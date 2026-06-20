@@ -772,12 +772,33 @@ fn oauth_error_html(title: &str, message: &str) -> String {
     oauth_result_html(title, "Sign-in failed", message, "error")
 }
 
+/// Escape the five HTML metacharacters (`& < > " '`) so a string is safe to
+/// interpolate into any HTML element or attribute context.
+fn html_escape(raw: &str) -> String {
+    let mut escaped = String::with_capacity(raw.len());
+    for ch in raw.chars() {
+        match ch {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#39;"),
+            other => escaped.push(other),
+        }
+    }
+    escaped
+}
+
 fn oauth_result_html(title: &str, heading: &str, message: &str, status: &str) -> String {
     let (accent, background, mark) = if status == "success" {
         ("#137333", "#eef7f0", "&#10003;")
     } else {
         ("#b3261e", "#fceeee", "!")
     };
+
+    let title = html_escape(title);
+    let heading = html_escape(heading);
+    let message = html_escape(message);
 
     format!(
         r#"<!doctype html>
