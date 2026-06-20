@@ -24,11 +24,12 @@ export function ApiSetup() {
     <section className="py-12 md:py-20">
       {/* Section header */}
       <h2 className="mb-4 font-mono text-lg text-nord-6 md:text-xl">
-        <span className="text-nord-3">$</span> <span className="text-nord-5"># Bring Your Own Key</span>
+        <span className="text-nord-3">$</span> <span className="text-nord-5"># Configure a Provider</span>
       </h2>
 
       <p className="mb-6 max-w-2xl font-mono text-sm text-nord-3">
-        Terminal AI uses the OpenAI-compatible API format. Use any provider — free or paid.
+        Terminal AI uses the OpenAI-compatible API format. Use any provider — free or paid.{" "}
+        <span className="text-nord-9">No key? Sign in with Codex OAuth</span> instead.
       </p>
 
       {/* Provider cards */}

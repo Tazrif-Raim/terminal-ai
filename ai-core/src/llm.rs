@@ -1,11 +1,17 @@
-use std::{fmt, path::PathBuf, time::Duration};
+use std::{
+    fmt,
+    io::{BufRead, BufReader},
+    path::PathBuf,
+    time::Duration,
+};
 
 use reqwest::{StatusCode, blocking::Client};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::{
-    config::ResolvedConfig,
+    codex_oauth,
+    config::{ProviderMode, ResolvedConfig},
     context,
     prompt::{self, PromptContext},
     types::{CommandOptions, OptionsValidationError},
@@ -19,6 +25,7 @@ pub(crate) enum LlmError {
     Timeout { seconds: u64 },
     ApiStatus { status: StatusCode, message: String },
     ApiResponse(serde_json::Error),
+    StreamRead(std::io::Error),
     EmptyMessage,
     ResponseParse(serde_json::Error),
     InvalidOptions(OptionsValidationError),
@@ -33,6 +40,21 @@ struct ChatRequest {
 
 #[derive(Debug, Serialize)]
 struct ChatMessage {
+    role: &'static str,
+    content: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexResponsesRequest {
+    model: String,
+    instructions: String,
+    input: Vec<CodexInputMessage>,
+    store: bool,
+    stream: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexInputMessage {
     role: &'static str,
     content: String,
 }
@@ -75,6 +97,12 @@ impl fmt::Display for LlmError {
                 write!(
                     formatter,
                     "error: LLM API response was not valid JSON: {source}"
+                )
+            }
+            Self::StreamRead(source) => {
+                write!(
+                    formatter,
+                    "error: could not read streamed LLM response: {source}"
                 )
             }
             Self::EmptyMessage => write!(formatter, "error: LLM response did not include content"),
@@ -187,10 +215,16 @@ fn send_chat_request(
     config: &ResolvedConfig,
     request: &ChatRequest,
 ) -> Result<String, LlmError> {
-    let response = client
-        .post(&config.api_url)
-        .bearer_auth(&config.api_key)
-        .json(request)
+    if config.provider_mode == ProviderMode::CodexOAuth {
+        return send_codex_responses_request(client, config, request);
+    }
+
+    let mut req = client.post(&config.api_url).bearer_auth(&config.api_key);
+
+    // Send JSON body for the chat completion POST request
+    req = req.json(request);
+
+    let response = req
         .send()
         .map_err(|source| request_error(source, config.request_timeout_seconds))?;
 
@@ -208,6 +242,134 @@ fn send_chat_request(
 
     let response: ChatResponse = serde_json::from_str(&body).map_err(LlmError::ApiResponse)?;
     first_message_content(response)
+}
+
+fn send_codex_responses_request(
+    client: &Client,
+    config: &ResolvedConfig,
+    request: &ChatRequest,
+) -> Result<String, LlmError> {
+    let token = codex_oauth::default_store_path()
+        .map_err(|e| LlmError::ApiStatus {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: format!("Codex OAuth: {e}"),
+        })
+        .and_then(|store_path| {
+            codex_oauth::get_token(&store_path).map_err(|e| LlmError::ApiStatus {
+                status: StatusCode::UNAUTHORIZED,
+                message: format!("Codex OAuth: {e}"),
+            })
+        })?;
+    let codex_request = codex_responses_request(config, request);
+
+    let mut req = client
+        .post(codex_oauth::CHATGPT_CODEX_RESPONSES_URL)
+        .bearer_auth(&token.access_token)
+        .header(
+            codex_oauth::ORIGINATOR_HEADER,
+            codex_oauth::ORIGINATOR_VALUE,
+        )
+        .json(&codex_request);
+
+    if let Some(account_id) = token.account_id.as_deref() {
+        req = req.header(codex_oauth::CHATGPT_ACCOUNT_ID_HEADER, account_id);
+    }
+
+    let response = req
+        .send()
+        .map_err(|source| request_error(source, config.request_timeout_seconds))?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let body = response
+            .text()
+            .map_err(|source| request_error(source, config.request_timeout_seconds))?;
+        return Err(LlmError::ApiStatus {
+            status,
+            message: clean_api_error_message(&body),
+        });
+    }
+
+    parse_codex_stream(response)
+}
+
+fn codex_responses_request(
+    config: &ResolvedConfig,
+    request: &ChatRequest,
+) -> CodexResponsesRequest {
+    let mut instructions = Vec::new();
+    let mut input = Vec::new();
+
+    for message in &request.messages {
+        match message.role {
+            "system" | "developer" => instructions.push(message.content.as_str()),
+            "assistant" => input.push(CodexInputMessage {
+                role: "assistant",
+                content: message.content.clone(),
+            }),
+            _ => input.push(CodexInputMessage {
+                role: "user",
+                content: message.content.clone(),
+            }),
+        }
+    }
+
+    CodexResponsesRequest {
+        model: config.model.clone(),
+        instructions: instructions.join("\n\n"),
+        input,
+        store: false,
+        stream: true,
+    }
+}
+
+fn parse_codex_stream(response: reqwest::blocking::Response) -> Result<String, LlmError> {
+    let reader = BufReader::new(response);
+    parse_sse_events(reader)
+}
+
+fn parse_sse_events(reader: impl BufRead) -> Result<String, LlmError> {
+    let mut output = String::new();
+
+    for line in reader.lines() {
+        let line = line.map_err(LlmError::StreamRead)?;
+        let Some(data) = line.strip_prefix("data:") else {
+            continue;
+        };
+        let data = data.trim();
+        if data.is_empty() {
+            continue;
+        }
+        if data == "[DONE]" {
+            break;
+        }
+        let value: Value = serde_json::from_str(data).map_err(LlmError::ApiResponse)?;
+        if let Some(error) = value.get("error") {
+            return Err(LlmError::ApiStatus {
+                status: StatusCode::BAD_GATEWAY,
+                message: clean_api_error_message(&json!({ "error": error }).to_string()),
+            });
+        }
+        if let Some(delta) = response_text_delta(&value) {
+            output.push_str(delta);
+        }
+    }
+
+    let output = output.trim().to_owned();
+    if output.is_empty() {
+        Err(LlmError::EmptyMessage)
+    } else {
+        Ok(output)
+    }
+}
+
+fn response_text_delta(value: &Value) -> Option<&str> {
+    let event_type = value.get("type").and_then(Value::as_str);
+    if event_type.is_some_and(|event_type| event_type.ends_with(".done")) {
+        return None;
+    }
+
+    value.get("delta").and_then(Value::as_str)
 }
 
 fn request_error(source: reqwest::Error, timeout_seconds: u64) -> LlmError {
@@ -294,9 +456,13 @@ fn clean_api_error_message(body: &str) -> String {
 mod tests {
     use super::{
         LlmError, build_chat_request, clean_api_error_message, extract_json,
-        generate_options_with_sender, parse_command_options,
+        generate_options_with_sender, parse_command_options, parse_sse_events,
+        response_text_delta,
     };
     use crate::{config::ResolvedConfig, types::Risk};
+    use reqwest::StatusCode;
+    use serde_json::json;
+    use std::io::Cursor;
 
     #[test]
     fn builds_openai_compatible_chat_request() {
@@ -389,8 +555,97 @@ mod tests {
         assert!(matches!(error, LlmError::InvalidOptions(_)));
     }
 
+    // --- parse_sse_events tests ---
+
+    #[test]
+    fn parse_sse_events_concatenates_deltas() {
+        let sse = Cursor::new(
+            b"data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello \"}\n\
+              data: {\"type\":\"response.output_text.delta\",\"delta\":\"World\"}\n\
+              data: [DONE]\n" as &[u8],
+        );
+        let result = parse_sse_events(sse).expect("should succeed");
+        assert_eq!(result, "Hello World");
+    }
+
+    #[test]
+    fn parse_sse_events_skips_non_data_lines() {
+        let sse = Cursor::new(
+            b": keep-alive comment\n\
+              \n\
+              data: {\"type\":\"response.output_text.delta\",\"delta\":\"text\"}\n" as &[u8],
+        );
+        let result = parse_sse_events(sse).expect("should succeed");
+        assert_eq!(result, "text");
+    }
+
+    #[test]
+    fn parse_sse_events_errors_on_error_payload() {
+        let sse = Cursor::new(b"data: {\"error\":{\"message\":\"model not found\"}}\n" as &[u8]);
+        let err = parse_sse_events(sse).expect_err("should error");
+
+        match &err {
+            LlmError::ApiStatus { status, message } => {
+                assert_eq!(*status, StatusCode::BAD_GATEWAY);
+                assert_eq!(message, "model not found");
+            }
+            other => panic!("expected ApiStatus, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_sse_events_errors_on_empty_stream() {
+        let sse = Cursor::new(b"data: [DONE]\n" as &[u8]);
+        let err = parse_sse_events(sse).expect_err("should error");
+        assert!(matches!(err, LlmError::EmptyMessage));
+    }
+
+    #[test]
+    fn parse_sse_events_errors_when_only_non_data_lines() {
+        let sse = Cursor::new(b": just a comment\n\n: another comment\n" as &[u8]);
+        let err = parse_sse_events(sse).expect_err("should error");
+        assert!(matches!(err, LlmError::EmptyMessage));
+    }
+
+    #[test]
+    fn parse_sse_events_ignores_empty_data() {
+        let sse = Cursor::new(
+            b"data: \n\
+              data: {\"type\":\"response.output_text.delta\",\"delta\":\"x\"}\n" as &[u8],
+        );
+        let result = parse_sse_events(sse).expect("should succeed");
+        assert_eq!(result, "x");
+    }
+
+    // --- response_text_delta tests ---
+
+    #[test]
+    fn response_text_delta_returns_some_for_ongoing_event() {
+        let value = json!({"type": "response.output_text.delta", "delta": "Hello"});
+        assert_eq!(response_text_delta(&value), Some("Hello"));
+    }
+
+    #[test]
+    fn response_text_delta_returns_none_for_done_event() {
+        let value = json!({"type": "response.output_text.done", "delta": "Hello"});
+        assert_eq!(response_text_delta(&value), None);
+    }
+
+    #[test]
+    fn response_text_delta_returns_none_when_no_delta_field() {
+        let value = json!({"type": "response.output_text.delta"});
+        assert_eq!(response_text_delta(&value), None);
+    }
+
+    #[test]
+    fn response_text_delta_returns_some_for_unknown_type() {
+        let value = json!({"type": "error", "delta": "something"});
+        assert_eq!(response_text_delta(&value), Some("something"));
+    }
+
     fn config() -> ResolvedConfig {
         ResolvedConfig {
+            provider_mode: crate::config::ProviderMode::OpenAiCompatible,
             api_url: "https://example.test/v1/chat/completions".to_owned(),
             api_key: "test-key".to_owned(),
             model: "test-model".to_owned(),
