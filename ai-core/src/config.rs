@@ -702,8 +702,8 @@ fn render_provider_menu(selected: usize, active_provider: ProviderMode) {
     let _ = stderr.queue(terminal::Clear(terminal::ClearType::All));
     let _ = stderr.queue(cursor::MoveTo(0, 0));
 
-    let _ = writeln!(stderr, "Select an AI provider:");
-    let _ = writeln!(stderr);
+    let _ = write!(stderr, "Select an AI provider:\r\n");
+    let _ = write!(stderr, "\r\n");
 
     for (i, &(ref choice, label)) in options.iter().enumerate() {
         let is_selected = i == selected;
@@ -725,28 +725,28 @@ fn render_provider_menu(selected: usize, active_provider: ProviderMode) {
         } else {
             Box::new(prefix)
         };
-        let _ = writeln!(stderr, "  {prefix_display} {label}");
+        let _ = write!(stderr, "  {prefix_display} {label}\r\n");
         if is_selected {
             let _ = stderr.queue(ResetColor);
         }
     }
 
     // Separator
-    let _ = writeln!(stderr, "  {}", "─".repeat(42));
+    let _ = write!(stderr, "  {}\r\n", "─".repeat(42));
     // Exit option
     let exit_label = "Exit";
     const EXIT_INDEX: usize = 2;
     let is_exit_selected = selected == EXIT_INDEX;
     if is_exit_selected {
         let _ = stderr.queue(SetBackgroundColor(crossterm::style::Color::DarkGrey));
-        let _ = writeln!(stderr, "  {exit_label}");
+        let _ = write!(stderr, "  {exit_label}\r\n");
         let _ = stderr.queue(ResetColor);
     } else {
-        let _ = writeln!(stderr, "  {exit_label}");
+        let _ = write!(stderr, "  {exit_label}\r\n");
     }
 
-    let _ = writeln!(stderr);
-    let _ = writeln!(stderr, "Use ↑/↓ to navigate, Enter to select.");
+    let _ = write!(stderr, "\r\n");
+    let _ = write!(stderr, "Use ↑/↓ to navigate, Enter to select.\r\n");
     let _ = stderr.flush();
 }
 
