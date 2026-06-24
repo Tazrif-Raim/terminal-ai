@@ -191,21 +191,21 @@ fn read_dangerous_confirmation() -> io::Result<bool> {
     loop {
         if let Event::Key(key) = event::read()? {
             if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                eprintln!();
+                eprint!("\r\n");
                 return Ok(false);
             }
 
             match key.code {
                 KeyCode::Enter => {
-                    eprintln!();
+                    eprint!("\r\n");
                     return Ok(true);
                 }
                 KeyCode::Char(value) if value.eq_ignore_ascii_case(&'q') => {
-                    eprintln!();
+                    eprint!("\r\n");
                     return Ok(false);
                 }
                 KeyCode::Esc => {
-                    eprintln!();
+                    eprint!("\r\n");
                     return Ok(false);
                 }
                 _ => {}
@@ -279,25 +279,25 @@ fn read_keep_confirmation() -> io::Result<bool> {
     loop {
         if let Event::Key(key) = event::read()? {
             if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                eprintln!();
+                eprint!("\r\n");
                 return Ok(false);
             }
 
             match key.code {
                 KeyCode::Char(value) if value.eq_ignore_ascii_case(&'y') => {
-                    eprintln!();
+                    eprint!("\r\n");
                     return Ok(true);
                 }
                 KeyCode::Char(value) if value.eq_ignore_ascii_case(&'n') => {
-                    eprintln!();
+                    eprint!("\r\n");
                     return Ok(false);
                 }
                 KeyCode::Char(value) if value.eq_ignore_ascii_case(&'q') => {
-                    eprintln!();
+                    eprint!("\r\n");
                     return Ok(false);
                 }
                 KeyCode::Esc => {
-                    eprintln!();
+                    eprint!("\r\n");
                     return Ok(false);
                 }
                 _ => {}
