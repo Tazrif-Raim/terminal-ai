@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { NavBar } from "@/components/NavBar"
 import { HeroSection } from "@/components/HeroSection"
 import { InstallSection } from "@/components/InstallSection"
@@ -8,29 +8,15 @@ import { UninstallSection } from "@/components/UninstallSection"
 import { Footer } from "@/components/Footer"
 import type { Shell } from "@/components/ShellToggle"
 
-function useDetectedShell(): Shell {
-  const [shell, setShell] = useState<Shell>('bash')
-
-  useEffect(() => {
-    const ua = navigator.userAgent.toLowerCase()
-    if (ua.includes('win')) {
-      setShell('powershell')
-    } else {
-      setShell('bash')
-    }
-  }, [])
-
-  return shell
+function getDefaultShell(): Shell {
+  if (typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('win')) {
+    return 'powershell'
+  }
+  return 'bash'
 }
 
 function App() {
-  const detectedShell = useDetectedShell()
-  const [selectedShell, setSelectedShell] = useState<Shell>('bash')
-
-  // Sync detected OS once on mount (after detectedShell settles)
-  useEffect(() => {
-    setSelectedShell(detectedShell)
-  }, [detectedShell])
+  const [selectedShell, setSelectedShell] = useState<Shell>(getDefaultShell)
 
   return (
     <div className="scanline grid-bg min-h-svh">
