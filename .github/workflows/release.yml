@@ -31,24 +31,94 @@ jobs:
         shell: pwsh
         run: cargo test --manifest-path .\ai-core\Cargo.toml
 
-      - name: Package static site
+      - name: Package static site (Windows)
         shell: pwsh
         run: .\scripts\package-windows.ps1 -BaseUrl $env:TERMINAL_AI_BASE_URL
 
-      - name: Upload static site artifact
+      - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: terminal-ai-site
+          name: terminal-ai-windows
           path: dist/site
           if-no-files-found: error
 
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          rustup set profile minimal
+          rustup update stable
+          rustup target add x86_64-unknown-linux-gnu
+
+      - name: Show Rust toolchain
+        shell: bash
+        run: rustup show
+
+      - name: Test
+        shell: bash
+        run: cargo test --manifest-path ai-core/Cargo.toml
+
+      - name: Package Linux release
+        shell: bash
+        env:
+          BASE_URL: ${{ env.TERMINAL_AI_BASE_URL }}
+        run: bash scripts/package-linux.sh
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal-ai-linux
+          path: dist/site
+          if-no-files-found: error
+
+  package-site:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terminal-ai-windows
+          path: windows-site
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terminal-ai-linux
+          path: linux-site
+
+      - name: Merge artifacts and update manifest
+        shell: pwsh
+        run: |
+          ./scripts/merge-release.ps1 `
+            -WindowsDir ./windows-site `
+            -LinuxDir ./linux-site `
+            -OutputRoot ./site
+
+      - name: Upload final site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terminal-ai-site
+          path: site
+          if-no-files-found: error
+
   deploy-vps:
-    needs: build-windows
+    needs: package-site
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || inputs.deploy
 
     steps:
-      - name: Download static site artifact
+      - name: Download final site artifact
         uses: actions/download-artifact@v4
         with:
           name: terminal-ai-site
@@ -98,3 +168,5 @@ jobs:
           curl -fsS "$TERMINAL_AI_BASE_URL/version.json" >/dev/null
           curl -fsS "$TERMINAL_AI_BASE_URL/powershell.ps1" >/dev/null
           curl -fsS "$TERMINAL_AI_BASE_URL/uninstall.ps1" >/dev/null
+          curl -fsS "$TERMINAL_AI_BASE_URL/install.sh" >/dev/null
+          curl -fsS "$TERMINAL_AI_BASE_URL/uninstall.sh" >/dev/null

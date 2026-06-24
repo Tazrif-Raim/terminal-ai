@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavBar } from "@/components/NavBar"
 import { HeroSection } from "@/components/HeroSection"
 import { InstallSection } from "@/components/InstallSection"
@@ -5,8 +6,18 @@ import { HowItWorks } from "@/components/HowItWorks"
 import { ApiSetup } from "@/components/ApiSetup"
 import { UninstallSection } from "@/components/UninstallSection"
 import { Footer } from "@/components/Footer"
+import type { Shell } from "@/components/ShellToggle"
+
+function getDefaultShell(): Shell {
+  if (typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('win')) {
+    return 'powershell'
+  }
+  return 'bash'
+}
 
 function App() {
+  const [selectedShell, setSelectedShell] = useState<Shell>(getDefaultShell)
+
   return (
     <div className="scanline grid-bg min-h-svh">
       <NavBar />
@@ -15,7 +26,7 @@ function App() {
 
         <div className="section-divider">─────────────────────</div>
 
-        <InstallSection />
+        <InstallSection selectedShell={selectedShell} onShellChange={setSelectedShell} />
 
         <div className="section-divider">─────────────────────</div>
 
@@ -27,7 +38,7 @@ function App() {
 
         <div className="section-divider">─────────────────────</div>
 
-        <UninstallSection />
+        <UninstallSection selectedShell={selectedShell} onShellChange={setSelectedShell} />
       </main>
       <Footer />
     </div>
