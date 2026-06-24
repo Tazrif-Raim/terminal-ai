@@ -1,6 +1,6 @@
 # terminal-ai
 
-Terminal-native AI command assistant for PowerShell (bash support planned).
+Terminal-native AI command assistant for Bash and PowerShell.
 
 ## Install / Update (Windows)
 
@@ -12,6 +12,18 @@ Uninstall:
 
 ```powershell
 irm https://terminal-ai.lab-node.me/uninstall.ps1 | iex
+```
+
+## Install / Update (Linux)
+
+```bash
+curl -fsSL https://terminal-ai.lab-node.me/install.sh | bash
+```
+
+Uninstall:
+
+```bash
+curl -fsSL https://terminal-ai.lab-node.me/uninstall.sh | bash
 ```
 
 ## Usage
@@ -34,6 +46,9 @@ ai --agent-logs
 ```
 
 ## PowerShell Setup
+
+If you installed via the Linux installer, the `ai` command is available after sourcing the wrapper or adding it to your PATH. The wrapper is located at `~/.local/share/terminal-ai/shell/bash.sh`.
+
 
 Build the Rust binary:
 
