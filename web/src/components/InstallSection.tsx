@@ -1,8 +1,30 @@
 import { CopyButton } from "@/components/CopyButton"
+import { ShellToggle, type Shell } from "@/components/ShellToggle"
 
-const INSTALL_CMD = "irm https://terminal-ai.lab-node.me/powershell.ps1 | iex"
+interface InstallSectionProps {
+  selectedShell: Shell
+  onShellChange: (shell: Shell) => void
+}
 
-export function InstallSection() {
+const CMD: Record<Shell, string> = {
+  powershell: "irm https://terminal-ai.lab-node.me/powershell.ps1 | iex",
+  bash: "curl -fsSL https://terminal-ai.lab-node.me/install.sh | bash",
+}
+
+const NOTES: Record<Shell, { paste: string; req: string }> = {
+  powershell: {
+    paste: "Windows: Paste in PowerShell as Administrator",
+    req: "Requires PowerShell",
+  },
+  bash: {
+    paste: "Linux: Paste in Terminal as root",
+    req: "Requires curl and bash",
+  },
+}
+
+export function InstallSection({ selectedShell, onShellChange }: InstallSectionProps) {
+  const cmd = CMD[selectedShell]
+
   return (
     <section className="py-12 md:py-20">
       {/* Section header */}
@@ -13,29 +35,28 @@ export function InstallSection() {
       {/* Install box */}
       <div className="rounded border border-nord-2 bg-nord-1 overflow-hidden">
         {/* Title bar */}
-        <div className="border-b border-nord-2 bg-nord-0/50 px-4 py-2 text-xs text-nord-3">
-          PowerShell (Windows)
+        <div className="border-b border-nord-2 bg-nord-0/50 px-4 py-1.5 text-xs text-nord-3 flex items-center">
+          <ShellToggle selected={selectedShell} onChange={onShellChange} />
         </div>
 
         {/* Command */}
         <div className="flex items-center gap-3 px-4 py-3">
           <code className="flex-1 break-all font-mono text-sm text-nord-8">
-            {INSTALL_CMD}
+            {cmd}
           </code>
-          <CopyButton text={INSTALL_CMD} />
+          <CopyButton text={cmd} />
         </div>
       </div>
 
-      {/* Bash — coming soon */}
-      <p className="mt-3 font-mono text-xs text-nord-3 italic">
-        Bash — coming soon{" "}
-        <span className="not-italic">🔜</span>
-      </p>
-
-      {/* Note */}
-      <p className="mt-2 font-mono text-[11px] text-nord-3">
-        ⚠ Paste in <strong className="text-nord-9">PowerShell as Administrator</strong>
-      </p>
+      {/* Notes */}
+      <div className="mt-3 space-y-1">
+        <p className="font-mono text-[11px] text-nord-3">
+          ⚠ {NOTES[selectedShell].paste}
+        </p>
+        <p className="font-mono text-[11px] text-nord-3">
+          ⚠ {NOTES[selectedShell].req}
+        </p>
+      </div>
     </section>
   )
 }
