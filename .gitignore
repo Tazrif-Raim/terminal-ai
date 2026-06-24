@@ -4,6 +4,7 @@
 
 # Generated release/site output. Rebuild with scripts/package-windows.ps1.
 /dist/
+.vite/
 
 # Local scratch files.
 *.tmp
