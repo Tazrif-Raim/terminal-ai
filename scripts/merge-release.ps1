@@ -47,48 +47,55 @@ $manifestPath = Join-Path $OutputRoot 'version.json'
 if (Test-Path -LiteralPath $manifestPath) {
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 
-    # Read Linux checksums
-    $linuxChecksumsPath = Join-Path $LinuxDir 'releases' | Join-Path -ChildPath '*'
-    $linuxChecksums = Get-ChildItem -Path "$linuxChecksumsPath/checksums.txt" -ErrorAction SilentlyContinue | Select-Object -First 1
-
-    if ($linuxChecksums -and $manifest.PSObject.Properties['windows_x64']) {
+    if ($manifest.PSObject.Properties['windows_x64']) {
         $version = $manifest.version
-        $linuxReleaseDir = "releases/$version/linux-x64"
 
-        $linuxChecksumLines = Get-Content -LiteralPath $linuxChecksums.FullName
-        $linuxAiCoreSha = $null
-        $linuxBashWrapperSha = $null
+        # Read Linux checksums — path is releases/<version>/linux-x64/checksums.txt
+        $linuxChecksumsPath = [System.IO.Path]::Combine($LinuxDir, 'releases', $version, 'linux-x64', 'checksums.txt')
+        $linuxChecksums = Get-Item -LiteralPath $linuxChecksumsPath -ErrorAction SilentlyContinue
 
-        foreach ($line in $linuxChecksumLines) {
-            $parts = $line -split '\s+', 2
-            if ($parts.Count -ge 2) {
-                $sha = $parts[0].Trim()
-                $path = $parts[1].Trim()
-                if ($path -match 'ai-core$') {
-                    $linuxAiCoreSha = $sha
-                }
-                elseif ($path -match 'bash\.sh$') {
-                    $linuxBashWrapperSha = $sha
-                }
-            }
+        if (-not $linuxChecksums) {
+            Write-Warning "Linux checksums not found at: $linuxChecksumsPath"
         }
 
-        if ($linuxAiCoreSha) {
-            $linuxUrl = "/$linuxReleaseDir/ai-core"
+        if ($linuxChecksums) {
+            $linuxReleaseDir = "releases/$version/linux-x64"
 
-            # Add linux_x64 entry
-            $linuxEntry = [ordered] @{
-                ai_core = [ordered] @{
-                    url = $linuxUrl
-                    sha256 = $linuxAiCoreSha
-                }
-                bash_wrapper = [ordered] @{
-                    url = "/$linuxReleaseDir/shell/bash.sh"
-                    sha256 = $linuxBashWrapperSha
+            $linuxChecksumLines = Get-Content -LiteralPath $linuxChecksums.FullName
+            $linuxAiCoreSha = $null
+            $linuxBashWrapperSha = $null
+
+            foreach ($line in $linuxChecksumLines) {
+                $parts = $line -split '\s+', 2
+                if ($parts.Count -ge 2) {
+                    $sha = $parts[0].Trim()
+                    $path = $parts[1].Trim()
+                    if ($path -match 'ai-core$') {
+                        $linuxAiCoreSha = $sha
+                    }
+                    elseif ($path -match 'bash\.sh$') {
+                        $linuxBashWrapperSha = $sha
+                    }
                 }
             }
 
-            $manifest | Add-Member -Name 'linux_x64' -Value $linuxEntry -MemberType NoteProperty -Force
+            if ($linuxAiCoreSha) {
+                $linuxUrl = "/$linuxReleaseDir/ai-core"
+
+                # Add linux_x64 entry
+                $linuxEntry = [ordered] @{
+                    ai_core = [ordered] @{
+                        url = $linuxUrl
+                        sha256 = $linuxAiCoreSha
+                    }
+                    bash_wrapper = [ordered] @{
+                        url = "/$linuxReleaseDir/shell/bash.sh"
+                        sha256 = $linuxBashWrapperSha
+                    }
+                }
+
+                $manifest | Add-Member -Name 'linux_x64' -Value $linuxEntry -MemberType NoteProperty -Force
+            }
         }
 
         # Write updated manifest
