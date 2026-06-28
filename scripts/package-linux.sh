@@ -8,6 +8,7 @@
 # Output structure (dist/site):
 #   releases/<version>/linux-x64/ai-core
 #   releases/<version>/linux-x64/shell/bash.sh
+#   releases/<version>/linux-x64/shell/zsh.zsh
 #   releases/<version>/linux-x64/checksums.txt
 #   install.sh          (Linux installer)
 #   uninstall.sh        (Linux uninstaller)
@@ -21,6 +22,7 @@ SKIP_BUILD="${SKIP_BUILD:-false}"
 
 CARGO_TOML="${REPO_ROOT}/ai-core/Cargo.toml"
 WRAPPER_SOURCE="${REPO_ROOT}/shell/bash.sh"
+ZSH_WRAPPER_SOURCE="${REPO_ROOT}/shell/zsh.zsh"
 INSTALLER_SOURCE="${REPO_ROOT}/install/bash.sh"
 UNINSTALLER_SOURCE="${REPO_ROOT}/install/uninstall.sh"
 RELEASE_BINARY="${REPO_ROOT}/ai-core/target/release/ai-core"
@@ -76,12 +78,14 @@ mkdir -p "$OUTPUT_ROOT" "$RELEASE_DIR" "$RELEASE_SHELL_DIR"
 
 AI_CORE_OUT="${RELEASE_DIR}/ai-core"
 WRAPPER_OUT="${RELEASE_SHELL_DIR}/bash.sh"
+ZSH_WRAPPER_OUT="${RELEASE_SHELL_DIR}/zsh.zsh"
 INSTALLER_OUT="${OUTPUT_ROOT}/install.sh"
 UNINSTALLER_OUT="${OUTPUT_ROOT}/uninstall.sh"
 CHECKSUMS_OUT="${RELEASE_DIR}/checksums.txt"
 
 cp "$RELEASE_BINARY" "$AI_CORE_OUT"
 cp "$WRAPPER_SOURCE" "$WRAPPER_OUT"
+cp "$ZSH_WRAPPER_SOURCE" "$ZSH_WRAPPER_OUT"
 cp "$INSTALLER_SOURCE" "$INSTALLER_OUT"
 cp "$UNINSTALLER_SOURCE" "$UNINSTALLER_OUT"
 chmod +x "$AI_CORE_OUT" "$INSTALLER_OUT" "$UNINSTALLER_OUT"
@@ -92,9 +96,11 @@ chmod +x "$AI_CORE_OUT" "$INSTALLER_OUT" "$UNINSTALLER_OUT"
 
 AI_CORE_SHA="$(get_sha256 "$AI_CORE_OUT")"
 WRAPPER_SHA="$(get_sha256 "$WRAPPER_OUT")"
+ZSH_WRAPPER_SHA="$(get_sha256 "$ZSH_WRAPPER_OUT")"
 
 printf '%s  releases/%s/linux-x64/ai-core\n' "$AI_CORE_SHA" "$VERSION" > "$CHECKSUMS_OUT"
 printf '%s  releases/%s/linux-x64/shell/bash.sh\n' "$WRAPPER_SHA" "$VERSION" >> "$CHECKSUMS_OUT"
+printf '%s  releases/%s/linux-x64/shell/zsh.zsh\n' "$ZSH_WRAPPER_SHA" "$VERSION" >> "$CHECKSUMS_OUT"
 
 # ---------------------------------------------------------------------------
 # Done

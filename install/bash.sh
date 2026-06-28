@@ -49,10 +49,29 @@ BIN_DIR="${INSTALL_ROOT}/bin"
 SHELL_DIR="${INSTALL_ROOT}/shell"
 STATE_DIR="${INSTALL_ROOT}/state"
 LOCAL_MANIFEST="${INSTALL_ROOT}/version.json"
-WRAPPER_PATH="${SHELL_DIR}/bash.sh"
+BASH_WRAPPER_PATH="${SHELL_DIR}/bash.sh"
+ZSH_WRAPPER_PATH="${SHELL_DIR}/zsh.zsh"
 AI_CORE_PATH="${BIN_DIR}/ai-core"
 
-PROFILE_PATH="${TERMINAL_AI_PROFILE_PATH:-${HOME}/.bashrc}"
+# Detect user's preferred login shell
+_ai_detect_shell() {
+    local shell_path="${SHELL:-}"
+    shell_path="${shell_path##*/}"
+    case "$shell_path" in
+        zsh) printf '%s\n' "zsh" ;;
+        *)   printf '%s\n' "bash" ;;
+    esac
+}
+
+USER_SHELL="$(_ai_detect_shell)"
+
+if [ "$USER_SHELL" = "zsh" ]; then
+    PROFILE_PATH="${TERMINAL_AI_PROFILE_PATH:-${HOME}/.zshrc}"
+    WRAPPER_PATH="$ZSH_WRAPPER_PATH"
+else
+    PROFILE_PATH="${TERMINAL_AI_PROFILE_PATH:-${HOME}/.bashrc}"
+    WRAPPER_PATH="$BASH_WRAPPER_PATH"
+fi
 
 MARKER_START='# >>> terminal-ai >>>'
 MARKER_END='# <<< terminal-ai <<<'
@@ -293,11 +312,15 @@ AI_CORE_URL="$(_parse_asset_field "ai_core" "url")"
 AI_CORE_SHA="$(_parse_asset_field "ai_core" "sha256")"
 BASH_WRAPPER_URL="$(_parse_asset_field "bash_wrapper" "url")"
 BASH_WRAPPER_SHA="$(_parse_asset_field "bash_wrapper" "sha256")"
+ZSH_WRAPPER_URL="$(_parse_asset_field "zsh_wrapper" "url")"
+ZSH_WRAPPER_SHA="$(_parse_asset_field "zsh_wrapper" "sha256")"
 
 require "linux_x64.ai_core.url" "$AI_CORE_URL"
 require "linux_x64.ai_core.sha256" "$AI_CORE_SHA"
 require "linux_x64.bash_wrapper.url" "$BASH_WRAPPER_URL"
 require "linux_x64.bash_wrapper.sha256" "$BASH_WRAPPER_SHA"
+require "linux_x64.zsh_wrapper.url" "$ZSH_WRAPPER_URL"
+require "linux_x64.zsh_wrapper.sha256" "$ZSH_WRAPPER_SHA"
 
 # ---------------------------------------------------------------------------
 # Check if already up to date
@@ -307,8 +330,10 @@ LOCAL_VERSION="$(get_local_version)"
 IS_CURRENT=false
 
 if [ -n "$LOCAL_VERSION" ] && [ "$LOCAL_VERSION" = "$MANIFEST_VERSION" ]; then
-    if [ -f "$AI_CORE_PATH" ] && [ -f "$WRAPPER_PATH" ]; then
-        if check_hash "$AI_CORE_PATH" "$AI_CORE_SHA" && check_hash "$WRAPPER_PATH" "$BASH_WRAPPER_SHA"; then
+    if [ -f "$AI_CORE_PATH" ] && [ -f "$BASH_WRAPPER_PATH" ] && [ -f "$ZSH_WRAPPER_PATH" ]; then
+        if check_hash "$AI_CORE_PATH" "$AI_CORE_SHA" && \
+           check_hash "$BASH_WRAPPER_PATH" "$BASH_WRAPPER_SHA" && \
+           check_hash "$ZSH_WRAPPER_PATH" "$ZSH_WRAPPER_SHA"; then
             IS_CURRENT=true
         fi
     fi
@@ -327,17 +352,21 @@ if [ "$IS_CURRENT" = false ]; then
     trap cleanup EXIT
 
     AI_CORE_DOWNLOAD="${TEMP_DIR}/ai-core"
-    WRAPPER_DOWNLOAD="${TEMP_DIR}/bash.sh"
+    BASH_WRAPPER_DOWNLOAD="${TEMP_DIR}/bash.sh"
+    ZSH_WRAPPER_DOWNLOAD="${TEMP_DIR}/zsh.zsh"
 
     download "$(join_url "$TERMINAL_AI_BASE_URL" "$AI_CORE_URL")" "$AI_CORE_DOWNLOAD"
-    download "$(join_url "$TERMINAL_AI_BASE_URL" "$BASH_WRAPPER_URL")" "$WRAPPER_DOWNLOAD"
+    download "$(join_url "$TERMINAL_AI_BASE_URL" "$BASH_WRAPPER_URL")" "$BASH_WRAPPER_DOWNLOAD"
+    download "$(join_url "$TERMINAL_AI_BASE_URL" "$ZSH_WRAPPER_URL")" "$ZSH_WRAPPER_DOWNLOAD"
 
     verify_hash "$AI_CORE_DOWNLOAD" "$AI_CORE_SHA"
-    verify_hash "$WRAPPER_DOWNLOAD" "$BASH_WRAPPER_SHA"
+    verify_hash "$BASH_WRAPPER_DOWNLOAD" "$BASH_WRAPPER_SHA"
+    verify_hash "$ZSH_WRAPPER_DOWNLOAD" "$ZSH_WRAPPER_SHA"
 
     chmod +x "$AI_CORE_DOWNLOAD"
     cp "$AI_CORE_DOWNLOAD" "$AI_CORE_PATH"
-    cp "$WRAPPER_DOWNLOAD" "$WRAPPER_PATH"
+    cp "$BASH_WRAPPER_DOWNLOAD" "$BASH_WRAPPER_PATH"
+    cp "$ZSH_WRAPPER_DOWNLOAD" "$ZSH_WRAPPER_PATH"
     printf '%s\n' "$MANIFEST_JSON" > "$LOCAL_MANIFEST"
 
     trap - EXIT

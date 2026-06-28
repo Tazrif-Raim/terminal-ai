@@ -32,6 +32,13 @@ if (Test-Path -LiteralPath $linuxReleases) {
     Copy-Item -LiteralPath $linuxReleases -Destination $outputReleases -Recurse -Force
 }
 
+# Copy Linux zsh wrapper if it exists
+$linuxZshWrapper = Join-Path $LinuxDir 'releases', $version, 'linux-x64', 'shell', 'zsh.zsh'
+if (Test-Path -LiteralPath $linuxZshWrapper) {
+    $outputZshWrapper = Join-Path $OutputRoot 'releases', $version, 'linux-x64', 'shell', 'zsh.zsh'
+    Copy-Item -LiteralPath $linuxZshWrapper -Destination $outputZshWrapper -Force
+}
+
 # Copy Linux install/uninstall scripts if they don't exist or are newer
 $linuxInstallSh = Join-Path $LinuxDir 'install.sh'
 $linuxUninstallSh = Join-Path $LinuxDir 'uninstall.sh'
@@ -64,6 +71,7 @@ if (Test-Path -LiteralPath $manifestPath) {
             $linuxChecksumLines = Get-Content -LiteralPath $linuxChecksums.FullName
             $linuxAiCoreSha = $null
             $linuxBashWrapperSha = $null
+            $linuxZshWrapperSha = $null
 
             foreach ($line in $linuxChecksumLines) {
                 $parts = $line -split '\s+', 2
@@ -75,6 +83,9 @@ if (Test-Path -LiteralPath $manifestPath) {
                     }
                     elseif ($path -match 'bash\.sh$') {
                         $linuxBashWrapperSha = $sha
+                    }
+                    elseif ($path -match 'zsh\.zsh$') {
+                        $linuxZshWrapperSha = $sha
                     }
                 }
             }
@@ -91,6 +102,10 @@ if (Test-Path -LiteralPath $manifestPath) {
                     bash_wrapper = [ordered] @{
                         url = "/$linuxReleaseDir/shell/bash.sh"
                         sha256 = $linuxBashWrapperSha
+                    }
+                    zsh_wrapper = [ordered] @{
+                        url = "/$linuxReleaseDir/shell/zsh.zsh"
+                        sha256 = $linuxZshWrapperSha
                     }
                 }
 

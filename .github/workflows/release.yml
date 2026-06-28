@@ -170,3 +170,4 @@ jobs:
           curl -fsS "$TERMINAL_AI_BASE_URL/uninstall.ps1" >/dev/null
           curl -fsS "$TERMINAL_AI_BASE_URL/install.sh" >/dev/null
           curl -fsS "$TERMINAL_AI_BASE_URL/uninstall.sh" >/dev/null
+          curl -fsS "$TERMINAL_AI_BASE_URL/releases/*/linux-x64/shell/zsh.zsh" >/dev/null

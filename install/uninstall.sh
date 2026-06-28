@@ -23,7 +23,24 @@ set -euo pipefail
 INSTALL_ROOT="${TERMINAL_AI_INSTALL_DIR:-${HOME}/.local/share/terminal-ai}"
 BIN_DIR="${INSTALL_ROOT}/bin"
 CONFIG_ROOT="${TERMINAL_AI_CONFIG_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/terminal-ai}"
-PROFILE_PATH="${TERMINAL_AI_PROFILE_PATH:-${HOME}/.bashrc}"
+
+# Detect user's preferred login shell
+_ai_detect_shell() {
+    local shell_path="${SHELL:-}"
+    shell_path="${shell_path##*/}"
+    case "$shell_path" in
+        zsh) printf '%s\n' "zsh" ;;
+        *)   printf '%s\n' "bash" ;;
+    esac
+}
+
+USER_SHELL="$(_ai_detect_shell)"
+
+if [ "$USER_SHELL" = "zsh" ]; then
+    PROFILE_PATH="${TERMINAL_AI_PROFILE_PATH:-${HOME}/.zshrc}"
+else
+    PROFILE_PATH="${TERMINAL_AI_PROFILE_PATH:-${HOME}/.bashrc}"
+fi
 
 MARKER_START='# >>> terminal-ai >>>'
 MARKER_END='# <<< terminal-ai <<<'
@@ -155,7 +172,13 @@ should_remove_user_data() {
 # Main
 # ---------------------------------------------------------------------------
 
+# Remove profile block from both shells
 remove_profile_block "$PROFILE_PATH"
+if [ "$USER_SHELL" = "zsh" ]; then
+    remove_profile_block "${HOME}/.bashrc"
+else
+    remove_profile_block "${HOME}/.zshrc"
+fi
 
 if [ "${TERMINAL_AI_SKIP_PATH:-}" != "1" ]; then
     remove_from_path "$BIN_DIR"
