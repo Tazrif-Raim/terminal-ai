@@ -12,7 +12,30 @@
 #   TERMINAL_AI_SKIP_PATH   Set to "1" to skip PATH modification
 #
 
+# ---------------------------------------------------------------------------
+# Validation helper — defined first so it is always in scope
+# ---------------------------------------------------------------------------
+
+require() {
+    if [ -z "${2:-}" ]; then
+        printf 'Invalid manifest: missing %s.\n' "$1" >&2
+        exit 1
+    fi
+}
+
 set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# Preflight: require python3 or jq for JSON parsing
+# ---------------------------------------------------------------------------
+
+if ! command -v python3 >/dev/null 2>&1 && ! command -v jq >/dev/null 2>&1; then
+    printf 'terminal-ai installer requires python3 or jq to parse the release manifest.\n' >&2
+    printf 'Install one of them and re-run:\n' >&2
+    printf '  sudo apt-get install -y python3\n' >&2
+    printf '  sudo apt-get install -y jq\n' >&2
+    exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -51,7 +74,15 @@ join_url() {
 download() {
     local url="$1"
     local out="$2"
-    curl -fsSL "$url" -o "$out"
+    curl \
+        --fail \
+        --show-error \
+        --silent \
+        --location \
+        --retry 3 \
+        --retry-delay 1 \
+        "$url" \
+        -o "$out"
 }
 
 verify_hash() {
@@ -76,18 +107,90 @@ check_hash() {
     [ "$actual" = "$expected" ]
 }
 
+# ---------------------------------------------------------------------------
+# JSON parsing — python3 first, jq fallback
+# ---------------------------------------------------------------------------
+
+# Parse a top-level string field from $MANIFEST_JSON.
+# Usage: _parse_json_field <field>
+_parse_json_field() {
+    local field="$1"
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "
+import json, sys
+m = json.loads(sys.argv[1])
+v = m.get(sys.argv[2], '')
+if v:
+    print(v)
+" "$MANIFEST_JSON" "$field" 2>/dev/null
+        return
+    fi
+
+    # jq fallback
+    printf '%s' "$MANIFEST_JSON" | jq -r --arg f "$field" '.[$f] // empty'
+}
+
+# Parse a nested field: manifest[asset_key][section][field]
+# Usage: _parse_asset_field <section> <field>
+_parse_asset_field() {
+    local section="$1"
+    local field="$2"
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "
+import json, sys
+m = json.loads(sys.argv[1])
+try:
+    print(m[sys.argv[2]][sys.argv[3]][sys.argv[4]])
+except KeyError:
+    pass
+" "$MANIFEST_JSON" "$ASSET_KEY" "$section" "$field" 2>/dev/null
+        return
+    fi
+
+    # jq fallback
+    printf '%s' "$MANIFEST_JSON" | \
+        jq -r --arg a "$ASSET_KEY" \
+              --arg s "$section" \
+              --arg f "$field" \
+              '.[$a][$s][$f] // empty'
+}
+
+# ---------------------------------------------------------------------------
+# Local version reader (reads already-installed version.json, not manifest)
+# ---------------------------------------------------------------------------
+
 get_local_version() {
     if [ ! -f "$LOCAL_MANIFEST" ]; then
         echo ""
         return
     fi
-    sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$LOCAL_MANIFEST" 2>/dev/null || echo ""
+
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    print(json.load(f).get('version', ''))
+" "$LOCAL_MANIFEST" 2>/dev/null || echo ""
+        return
+    fi
+
+    if command -v jq >/dev/null 2>&1; then
+        jq -r '.version // empty' "$LOCAL_MANIFEST" 2>/dev/null || echo ""
+        return
+    fi
+
+    echo ""
 }
+
+# ---------------------------------------------------------------------------
+# PATH helpers
+# ---------------------------------------------------------------------------
 
 add_to_path() {
     local path_entry="$1"
 
-    # Check if already in PATH (both current session and profile)
     local already_in_path=false
     local path_entry_norm
     path_entry_norm="$(realpath -m "$path_entry" 2>/dev/null || echo "$path_entry")"
@@ -106,7 +209,6 @@ add_to_path() {
         return 1
     fi
 
-    # Add to PATH for current session
     export PATH="${path_entry}:${PATH}"
     return 0
 }
@@ -132,7 +234,7 @@ add_profile_block() {
     local pattern_end
     pattern_end="$(printf '%s\n' "$MARKER_END" | sed 's/[.[\*^$()+?{|]/\\&/g')"
     content="$(printf '%s\n' "$content" | sed "/${pattern_start}/,/${pattern_end}/d")"
-    content="$(printf '%s\n' "$content" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')"  # trim trailing blank lines
+    content="$(printf '%s\n' "$content" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')"
 
     local block
     block="$(printf '%s\n' "$MARKER_START" \
@@ -154,11 +256,9 @@ ARCH="$(uname -m)"
 case "$ARCH" in
     x86_64)
         ASSET_KEY="linux_x64"
-        RELEASE_DIR="linux-x64"
         ;;
     aarch64|arm64)
         ASSET_KEY="linux_arm64"
-        RELEASE_DIR="linux-arm64"
         ;;
     *)
         printf 'terminal-ai Linux MVP currently supports x86_64 and aarch64. Detected: %s\n' "$ARCH" >&2
@@ -177,46 +277,30 @@ mkdir -p "$BIN_DIR" "$SHELL_DIR" "$STATE_DIR"
 # ---------------------------------------------------------------------------
 
 MANIFEST_URL="$(join_url "$TERMINAL_AI_BASE_URL" "/version.json")"
-MANIFEST_JSON="$(curl -fsSL "$MANIFEST_URL")"
-
-# Simple JSON field extraction (no jq dependency)
-# Extracts a top-level string field from the manifest
-parse_manifest() {
-    printf '%s\n' "$MANIFEST_JSON" | sed -n "s/.*\"${1}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"
-}
-
-MANIFEST_VERSION="$(parse_manifest "version")"
-if [ -z "$MANIFEST_VERSION" ]; then
-    printf 'Failed to parse version from manifest at %s\n' "$MANIFEST_URL" >&2
-    exit 1
-fi
-
-# Extract a specific field from a specific sub-section within ASSET_KEY
-# Usage: extract_asset_field <section> <field>
-# e.g. extract_asset_field "ai_core" "url"
-extract_asset_field() {
-    local section="$1"
-    local field="$2"
-    printf '%s\n' "$MANIFEST_JSON" | \
-        sed -n "/\"${ASSET_KEY}\"[[:space:]]*:/,/^[[:space:]]*}/{
-            /\"${section}\"[[:space:]]*:/,/^[[:space:]]*}/{
-                s/.*\"${field}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p
-            }
-        }"
-}
-
-AI_CORE_URL="$(extract_asset_field "ai_core" "url")"
-AI_CORE_SHA="$(extract_asset_field "ai_core" "sha256")"
-BASH_WRAPPER_URL="$(extract_asset_field "bash_wrapper" "url")"
-BASH_WRAPPER_SHA="$(extract_asset_field "bash_wrapper" "sha256")"
-
-if [ -z "$AI_CORE_URL" ] || [ -z "$AI_CORE_SHA" ]; then
-    printf 'Manifest does not include %s assets.\n' "$ASSET_KEY" >&2
+if ! MANIFEST_JSON="$(curl -fsSL "$MANIFEST_URL")"; then
+    printf 'Failed to download manifest: %s\n' "$MANIFEST_URL" >&2
     exit 1
 fi
 
 # ---------------------------------------------------------------------------
-# Check if current
+# Parse manifest fields
+# ---------------------------------------------------------------------------
+
+MANIFEST_VERSION="$(_parse_json_field "version")"
+require "version" "$MANIFEST_VERSION"
+
+AI_CORE_URL="$(_parse_asset_field "ai_core" "url")"
+AI_CORE_SHA="$(_parse_asset_field "ai_core" "sha256")"
+BASH_WRAPPER_URL="$(_parse_asset_field "bash_wrapper" "url")"
+BASH_WRAPPER_SHA="$(_parse_asset_field "bash_wrapper" "sha256")"
+
+require "linux_x64.ai_core.url" "$AI_CORE_URL"
+require "linux_x64.ai_core.sha256" "$AI_CORE_SHA"
+require "linux_x64.bash_wrapper.url" "$BASH_WRAPPER_URL"
+require "linux_x64.bash_wrapper.sha256" "$BASH_WRAPPER_SHA"
+
+# ---------------------------------------------------------------------------
+# Check if already up to date
 # ---------------------------------------------------------------------------
 
 LOCAL_VERSION="$(get_local_version)"
@@ -237,7 +321,6 @@ fi
 if [ "$IS_CURRENT" = false ]; then
     TEMP_DIR="$(mktemp -d "/tmp/terminal-ai-install-XXXXXX")"
 
-    # Cleanup on exit
     cleanup() {
         rm -rf "$TEMP_DIR"
     }

@@ -65,32 +65,33 @@ _ai_find_core() {
 }
 
 # ---------------------------------------------------------------------------
-# JSON field extraction (jq -> sed fallback)
+# JSON field extraction (python3 -> jq fallback)
 # ---------------------------------------------------------------------------
 
 _ai_parse_json() {
     local json="$1"
     local field="$2"
 
-    # jq — best option
-    if command -v jq &>/dev/null; then
-        local val
-        val="$(printf '%s\n' "$json" | jq -r ".${field}" 2>/dev/null)"
-        [ -n "$val" ] && [ "$val" != "null" ] && printf '%s\n' "$val" && return 0
+    if command -v python3 &>/dev/null; then
+        python3 -c "
+import json, sys
+m = json.loads(sys.argv[1])
+v = m.get(sys.argv[2])
+if v is not None:
+    print(v)
+" "$json" "$field" 2>/dev/null
+        return
     fi
 
-    # sed fallback — extracts "field":"value" pairs
-    case "$field" in
-        action)
-            printf '%s\n' "$json" | sed -n 's/.*"action"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
-            ;;
-        command)
-            printf '%s\n' "$json" | sed -n 's/.*"command"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
-            ;;
-        title)
-            printf '%s\n' "$json" | sed -n 's/.*"title"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
-            ;;
-    esac
+    if command -v jq &>/dev/null; then
+        local val
+        val="$(printf '%s\n' "$json" | jq -r ".${field} // empty" 2>/dev/null)"
+        [ -n "$val" ] && printf '%s\n' "$val"
+        return
+    fi
+
+    printf 'terminal-ai: python3 or jq is required to parse ai-core output.\n' >&2
+    return 1
 }
 
 # ---------------------------------------------------------------------------
