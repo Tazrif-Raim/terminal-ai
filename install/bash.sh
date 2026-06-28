@@ -4,7 +4,7 @@
 #
 # Usage:
 #   curl -fsSL https://terminal-ai.lab-node.me/install.sh | bash
-#
+
 # Environment variables:
 #   TERMINAL_AI_BASE_URL    Base URL for downloads (default: https://terminal-ai.lab-node.me)
 #   TERMINAL_AI_INSTALL_DIR Install directory (default: ~/.local/share/terminal-ai)
