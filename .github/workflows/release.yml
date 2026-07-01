@@ -100,47 +100,47 @@ jobs:
           path: linux-site
 
       - name: Merge artifacts and update manifest
-        shell: pwsh
-        run: |
-          ./scripts/merge-release.ps1 `
-            -WindowsDir ./windows-site `
-            -LinuxDir ./linux-site `
-            -OutputRoot ./site
+        shell: bash
+        run: bash scripts/merge-release.sh ./windows-site ./linux-site ./site
 
       - name: Validate merged site
-        shell: pwsh
+        shell: bash
         run: |
-          $manifestPath = "site/version.json"
-          if (-not (Test-Path -LiteralPath $manifestPath)) {
-            throw "version.json not found in merged site."
-          }
-          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-          $version = $manifest.version
-          if (-not $version) { throw "version missing in version.json." }
-          Write-Host "Merged site version: $version"
+          MANIFEST_PATH="site/version.json"
+          if [ ! -f "$MANIFEST_PATH" ]; then
+            echo "version.json not found in merged site." >&2
+            exit 1
+          fi
+
+          VERSION=$(jq -r '.version' "$MANIFEST_PATH")
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "version missing in version.json." >&2
+            exit 1
+          fi
+          echo "Merged site version: $VERSION"
 
           # Check all referenced release binaries exist
-          $platforms = $manifest.PSObject.Properties | Where-Object { $_.Name -match '^(windows|linux)_' }
-          foreach ($p in $platforms) {
-            $platformName = $p.Name
-            $assets = $p.Value
-            $assetNames = $assets.PSObject.Properties.Name
-            foreach ($assetName in $assetNames) {
-              $asset = $assets.$assetName
-              $url = $asset.url
-              $sha256 = $asset.sha256
-              $localPath = "site/$($url.TrimStart('/'))"
-              if (-not (Test-Path -LiteralPath $localPath)) {
-                throw "Missing release binary for $platformName/$assetName: expected at $localPath"
-              }
-              $actualSha = (Get-FileHash -LiteralPath $localPath -Algorithm SHA256).Hash.ToLowerInvariant()
-              if ($actualSha -ne $sha256.ToLowerInvariant()) {
-                throw "SHA-256 mismatch for $localPath. Expected $sha256, got $actualSha."
-              }
-              Write-Host "  Verified: $platformName/$assetName ($url)"
-            }
-          }
-          Write-Host "All release binaries present and checksums verified."
+          for platform in $(jq -r 'keys[] | select(startswith("windows_") or startswith("linux_"))' "$MANIFEST_PATH"); do
+            while IFS= read -r asset_name; do
+              [ -z "$asset_name" ] && continue
+              url=$(jq -r --arg p "$platform" --arg a "$asset_name" '.[$p][$a].url' "$MANIFEST_PATH")
+              expected_sha=$(jq -r --arg p "$platform" --arg a "$asset_name" '.[$p][$a].sha256' "$MANIFEST_PATH")
+              local_path="site/${url#/}"
+
+              if [ ! -f "$local_path" ]; then
+                echo "Missing release binary for $platform/$asset_name: expected at $local_path" >&2
+                exit 1
+              fi
+
+              actual_sha=$(sha256sum "$local_path" | cut -d' ' -f1)
+              if [ "$actual_sha" != "$expected_sha" ]; then
+                echo "SHA-256 mismatch for $local_path. Expected $expected_sha, got $actual_sha." >&2
+                exit 1
+              fi
+              echo "  Verified: $platform/$asset_name ($url)"
+            done < <(jq -r --arg p "$platform" '.[$p] | keys[]' "$MANIFEST_PATH")
+          done
+          echo "All release binaries present and checksums verified."
 
       - name: Upload final site artifact
         uses: actions/upload-artifact@v4
