@@ -29,14 +29,10 @@ if (Test-Path -LiteralPath $WindowsDir) {
 $linuxReleases = Join-Path $LinuxDir 'releases'
 if (Test-Path -LiteralPath $linuxReleases) {
     $outputReleases = Join-Path $OutputRoot 'releases'
-    Copy-Item -LiteralPath $linuxReleases -Destination $outputReleases -Recurse -Force
-}
-
-# Copy Linux zsh wrapper if it exists
-$linuxZshWrapper = Join-Path $LinuxDir 'releases', $version, 'linux-x64', 'shell', 'zsh.zsh'
-if (Test-Path -LiteralPath $linuxZshWrapper) {
-    $outputZshWrapper = Join-Path $OutputRoot 'releases', $version, 'linux-x64', 'shell', 'zsh.zsh'
-    Copy-Item -LiteralPath $linuxZshWrapper -Destination $outputZshWrapper -Force
+    Get-ChildItem -LiteralPath $linuxReleases | ForEach-Object {
+        $dest = Join-Path $outputReleases $_.Name
+        Copy-Item -LiteralPath $_.FullName -Destination $dest -Recurse -Force
+    }
 }
 
 # Copy Linux install/uninstall scripts if they don't exist or are newer

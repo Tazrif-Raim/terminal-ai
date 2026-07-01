@@ -11,6 +11,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
 
 env:
   TERMINAL_AI_BASE_URL: https://terminal-ai.lab-node.me
@@ -105,6 +107,41 @@ jobs:
             -LinuxDir ./linux-site `
             -OutputRoot ./site
 
+      - name: Validate merged site
+        shell: pwsh
+        run: |
+          $manifestPath = "site/version.json"
+          if (-not (Test-Path -LiteralPath $manifestPath)) {
+            throw "version.json not found in merged site."
+          }
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+          $version = $manifest.version
+          if (-not $version) { throw "version missing in version.json." }
+          Write-Host "Merged site version: $version"
+
+          # Check all referenced release binaries exist
+          $platforms = $manifest.PSObject.Properties | Where-Object { $_.Name -match '^(windows|linux)_' }
+          foreach ($p in $platforms) {
+            $platformName = $p.Name
+            $assets = $p.Value
+            $assetNames = $assets.PSObject.Properties.Name
+            foreach ($assetName in $assetNames) {
+              $asset = $assets.$assetName
+              $url = $asset.url
+              $sha256 = $asset.sha256
+              $localPath = "site/$($url.TrimStart('/'))"
+              if (-not (Test-Path -LiteralPath $localPath)) {
+                throw "Missing release binary for $platformName/$assetName: expected at $localPath"
+              }
+              $actualSha = (Get-FileHash -LiteralPath $localPath -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($actualSha -ne $sha256.ToLowerInvariant()) {
+                throw "SHA-256 mismatch for $localPath. Expected $sha256, got $actualSha."
+              }
+              Write-Host "  Verified: $platformName/$assetName ($url)"
+            }
+          }
+          Write-Host "All release binaries present and checksums verified."
+
       - name: Upload final site artifact
         uses: actions/upload-artifact@v4
         with:
@@ -165,8 +202,25 @@ jobs:
       - name: Smoke public files
         shell: bash
         run: |
-          curl -fsS "$TERMINAL_AI_BASE_URL/version.json" >/dev/null
-          curl -fsS "$TERMINAL_AI_BASE_URL/powershell.ps1" >/dev/null
-          curl -fsS "$TERMINAL_AI_BASE_URL/uninstall.ps1" >/dev/null
-          curl -fsS "$TERMINAL_AI_BASE_URL/install.sh" >/dev/null
-          curl -fsS "$TERMINAL_AI_BASE_URL/uninstall.sh" >/dev/null
+          BASE="$TERMINAL_AI_BASE_URL"
+          curl -fsS "$BASE/version.json" >/dev/null
+          curl -fsS "$BASE/powershell.ps1" >/dev/null
+          curl -fsS "$BASE/uninstall.ps1" >/dev/null
+          curl -fsS "$BASE/install.sh" >/dev/null
+          curl -fsS "$BASE/uninstall.sh" >/dev/null
+
+      - name: Smoke release binaries
+        shell: bash
+        run: |
+          BASE="$TERMINAL_AI_BASE_URL"
+          manifest="$(curl -fsS "$BASE/version.json")"
+          platforms="windows_x64 linux_x64"
+          for platform in $platforms; do
+            while IFS= read -r url; do
+              [ -z "$url" ] && continue
+              full="${BASE}${url}"
+              echo "Checking: $full"
+              curl -fsS "$full" >/dev/null
+            done < <(echo "$manifest" | python3 -c "import sys,json;m=json.load(sys.stdin);p=m.get('$platform',{});[print(v['url']) for v in p.values()]")
+          done
+          echo "All release binaries are reachable."
